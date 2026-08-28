@@ -1,0 +1,75 @@
+/* Read-only status and ledger blocks inside the headroom card body. */
+
+/* The status block leads the body; the ledger trails the fields, so only the
+   ledger needs the separator that fields draw between themselves. */
+.ledger {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.block {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.blockTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.statRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.statLabel {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.statValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.statNote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.statError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-error);
+}
+
+.ledgerRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.ledgerHash {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}

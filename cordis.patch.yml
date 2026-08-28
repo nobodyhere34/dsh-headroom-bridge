@@ -1,0 +1,9 @@
+# dsh-headroom-bridge bundle patch: mount the host plugin under its package name,
+# resolved through the profile's node_modules. The entry config doubles as the
+# settings base layer — the web card edits the same fields.
+- insert:
+    - id: dsh-headroom-bridge
+      name: dsh-headroom-bridge
+      config:
+        mode: audit
+        baseUrl: http://127.0.0.1:8787

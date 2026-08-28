@@ -1,0 +1,8 @@
+# Plugin-market submission card (mirrors market-submission/dream12347__dsh-session-manager.yml).
+# Fill <owner> with the GitHub account once the repo is pushed.
+url: https://github.com/<owner>/dsh-headroom-bridge
+name: <owner>/dsh-headroom-bridge
+category: compression
+description:
+  en: "DSH headroom bridge: content-aware compression of tool results — arm-A post-execute compression (audit/live) of new results, arm-B pre-step shadow-price reclaim of old oversized results, headroom_retrieve / headroom_stats model tools, local CCR ledger (originals always redeemable), and a web settings card with live stats."
+  zh: "DSH Headroom 压缩桥：对工具结果做内容感知压缩——主臂 A 压缩新结果（audit/live），辅臂 B 影子价回收旧超长结果，headroom_retrieve / headroom_stats 模型工具，本地 CCR 台账（原文随时可赎回），带实时统计的 Web 设置卡片。"
