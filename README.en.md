@@ -31,8 +31,8 @@ The bridge uses exactly three endpoints: `POST /v1/compress` (one tool message, 
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # local directory
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.1'  # GitHub tag
-pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.1.tgz # tarball
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.2'  # GitHub tag
+pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.2.tgz # tarball
 ```
 
 Then **restart `dsh web`**.
@@ -124,7 +124,7 @@ This project's trade: compressors, content routing, and CCR storage all live on 
 
 - DSH: the current code is adapted to and verified against mainline **dsh-v0.1.5-rc.2** (typecheck + 38 unit tests green). The adaptation uses rc.2-only interface shapes (`SessionSeq`/`snapshotEvents()`/`eventAt()`, `surfaceOp: {op:'replace', startSeq, endSeq}`, `ctx.settings.installSection`, the `@deepseek-ai/cordis` package name) and **no longer supports 0.1.2-rc.1 or earlier** — those call sites fail outright on older hosts
 - headroom proxy: official `0.36.5-code` **verified**. 0.37.0 makes `/v1/compress` session-aware (sidecar) and fixes subagent output garbling (#3286); upgrade compatibility is **not evaluated**
-- This repo is at 0.1.1 (GitHub tag `v0.1.1`); 0.1.0 was the untagged initial form — don't read compatibility off its peer declarations
+- This repo is at 0.1.2 (GitHub tag `v0.1.2`); 0.1.0 was the untagged initial form — don't read compatibility off its peer declarations
 
 ## FAQ
 

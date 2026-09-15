@@ -31,8 +31,8 @@ docker run -d --name headroom --network host ghcr.io/headroomlabs-ai/headroom:0.
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # 本地目录
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.1'  # GitHub tag
-pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.1.tgz # tarball
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.2'  # GitHub tag
+pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.2.tgz # tarball
 ```
 
 然后**重启 `dsh web`**。
@@ -124,7 +124,7 @@ live 采纳后模型看到的是压缩文本 + 一行标记：
 
 - DSH：当前代码在主线 **dsh-v0.1.5-rc.2** 上适配并验证（typecheck + 38 个单元测试全绿）。适配用了 rc.2 才有的接口形态（`SessionSeq`/`snapshotEvents()`/`eventAt()`、`surfaceOp: {op:'replace', startSeq, endSeq}`、`ctx.settings.installSection`、`@deepseek-ai/cordis` 包名），**不再兼容 0.1.2-rc.1 及更早**——旧版上这些调用点会直接报错
 - headroom 代理：官方 `0.36.5-code` **验证过**。0.37.0 把 `/v1/compress` 改成了会话感知（sidecar）、并修复子代理输出乱码（#3286）；升级兼容性**未评估**
-- 本仓库当前 0.1.1（GitHub tag `v0.1.1`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
+- 本仓库当前 0.1.2（GitHub tag `v0.1.2`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
 
 ## FAQ
 
