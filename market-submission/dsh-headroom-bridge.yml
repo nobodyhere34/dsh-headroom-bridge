@@ -1,7 +1,6 @@
 # Plugin-market submission card (mirrors market-submission/dream12347__dsh-session-manager.yml).
-# Fill <owner> with the GitHub account once the repo is pushed.
-url: https://github.com/<owner>/dsh-headroom-bridge
-name: <owner>/dsh-headroom-bridge
+url: https://github.com/nobodyhere34/dsh-headroom-bridge
+name: nobodyhere34/dsh-headroom-bridge
 category: compression
 description:
   en: "DSH headroom bridge: content-aware compression of tool results — arm-A post-execute compression (audit/live) of new results, arm-B pre-step shadow-price reclaim of old oversized results, headroom_retrieve / headroom_stats model tools, local CCR ledger (originals always redeemable), and a web settings card with live stats."

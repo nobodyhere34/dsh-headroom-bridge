@@ -124,7 +124,7 @@ This project's trade: compressors, content routing, and CCR storage all live on 
 
 - DSH: the current code is adapted to and verified against mainline **dsh-v0.1.5-rc.2** (typecheck + 33 unit tests green). The adaptation uses rc.2-only interface shapes (`SessionSeq`/`snapshotEvents()`/`eventAt()`, `surfaceOp: {op:'replace', startSeq, endSeq}`, `ctx.settings.installSection`, the `@deepseek-ai/cordis` package name) and **no longer supports 0.1.2-rc.1 or earlier** — those call sites fail outright on older hosts
 - headroom proxy: official `0.36.5-code` **verified**. 0.37.0 makes `/v1/compress` session-aware (sidecar) and fixes subagent output garbling (#3286); upgrade compatibility is **not evaluated**
-- This repo is currently 0.1.0 with **no GitHub tags/releases yet** (0.1.1 planned — docs/PLAN.md D0)
+- This repo is at 0.1.1 (GitHub tag `v0.1.1`); 0.1.0 was the untagged initial form — don't read compatibility off its peer declarations
 
 ## FAQ
 
