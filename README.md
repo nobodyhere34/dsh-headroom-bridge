@@ -31,7 +31,7 @@ docker run -d --name headroom --network host ghcr.io/headroomlabs-ai/headroom:0.
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # 本地目录
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.1'  # 打 tag 发布后
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.1'  # GitHub tag
 pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.1.tgz # tarball
 ```
 

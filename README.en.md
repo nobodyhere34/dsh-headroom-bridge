@@ -31,7 +31,7 @@ The bridge uses exactly three endpoints: `POST /v1/compress` (one tool message, 
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # local directory
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.1'  # once tags exist
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.1'  # GitHub tag
 pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.1.tgz # tarball
 ```
 
