@@ -14,10 +14,10 @@
  * failure keeps the untouched original decision.
  * @module
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import type ToolRegistry from '@deepseek-ai/dsh-tools';
 import type { Config as RawBridgeConfig } from './config.js';
-export declare const name = "@dsh-external/dsh-headroom-bridge";
+export declare const name = "@nobodyhere34/dsh-headroom-bridge";
 /** Require the tool registry and the webserver the web card fetches. */
 export declare const inject: string[];
 /**

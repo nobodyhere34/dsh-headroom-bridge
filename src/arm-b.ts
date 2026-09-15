@@ -16,14 +16,14 @@
  * @module
  */
 
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { freezeMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 // Type-only: the compaction/prune SessionEventMap merge + tokenMeter ctx merge.
 import type {} from '@deepseek-ai/dsh-compaction'
 import type {} from '@deepseek-ai/dsh-token-meter'
-import type { Session, SessionEvent, ToolResultMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, ToolResultMessage, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.js'
 import { LOG_TAG } from './config.js'
 import { codePointLength, compileGlobs, contentHash, flattenPlainText } from './util.js'
@@ -36,7 +36,7 @@ import type { BridgeCounters } from './stats.js'
 
 /** One reclaim candidate: an over-threshold tool-result surface node. */
 interface Candidate {
-  readonly seq: number
+  readonly seq: SessionSeq
   readonly event: SessionEvent<'tool/result'>
   readonly toolName: string
   readonly args: unknown
@@ -44,7 +44,7 @@ interface Candidate {
 
 /** Map a result source callId back to its logged tool identity. */
 function toolCallOf(session: Session, callId: string): { name: string; args: unknown } | undefined {
-  for (const event of session.events) {
+  for (const event of session.snapshotEvents()) {
     if (event.type !== 'tool/call' || event.data.callId !== callId) continue
     let args: unknown
     try {
@@ -85,7 +85,7 @@ async function reclaimPass(
   const candidates: Candidate[] = []
   for (const seq of [...session.surface.nodes]) {
     if (candidates.length >= getConfig().armB.maxPerStep) break
-    const event = session.events[seq]
+    const event = session.eventAt(seq)
     if (event?.type !== 'tool/result') continue
     if (attempted.has(seq)) continue
     const call = toolCallOf(session, event.data.message.source.callId)
@@ -181,7 +181,7 @@ async function reclaimPass(
         shadowedTokenCount: meter.estimateMessage(message),
       })
       session.append('tool/result', { ...candidate.event.data, message: replacementMessage }, {
-        surfaceOp: { op: 'replace', start: candidate.seq, end: candidate.seq },
+        surfaceOp: { op: 'replace', startSeq: candidate.seq, endSeq: candidate.seq },
         sourceEventSeqs: [candidate.seq],
       })
       counters.savedChars += originalChars - compressedChars

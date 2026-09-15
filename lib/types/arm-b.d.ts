@@ -15,7 +15,7 @@
  * hot-path rewrite of already-sent history.
  * @module
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ResolvedConfig } from './config.js';
 import { CcrStore } from './store.js';
 import { HeadroomClient } from './proxy-client.js';

@@ -3,7 +3,7 @@
 # settings base layer — the web card edits the same fields.
 - insert:
     - id: dsh-headroom-bridge
-      name: dsh-headroom-bridge
+      name: '@nobodyhere34/dsh-headroom-bridge'
       config:
         mode: audit
         baseUrl: http://127.0.0.1:8787

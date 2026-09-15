@@ -2,15 +2,15 @@
  * Mutable configuration source plus the settings-namespace wiring.
 
  * Arms read configuration through a getter so the web settings card can
- * hot-apply field changes without a fiber rebuild: installSettingsSection
+ * hot-apply field changes without a fiber rebuild: installSection
  * hands us a thunk over the resolved settings scope, and onChange re-resolves
  * it into the same ResolvedConfig validation the loader entry uses.
  * @module
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import type { Config as RawConfig, ResolvedConfig } from './config.js';
 /** Settings namespace key shared with the web card. */
-export declare const HEADROOM_NS: import("@deepseek-ai/dsh-settings").SettingsNamespace;
+export declare const HEADROOM_NS = "headroom";
 /**
  * Mutable configuration source: arms read get() for the current resolved
  * view; the settings card replaces the raw layer through setRaw().

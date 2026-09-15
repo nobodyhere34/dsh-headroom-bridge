@@ -15,7 +15,7 @@
  * @module
  */
 
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type ToolRegistry from '@deepseek-ai/dsh-tools'
 import { HeadroomClient } from './proxy-client.js'
 import { LOG_TAG, PKG_NAME, resolveConfig } from './config.js'

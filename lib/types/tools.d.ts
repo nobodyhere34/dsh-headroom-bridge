@@ -1,5 +1,5 @@
 /** Model-facing consumers: headroom_retrieve. @module */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ResolvedConfig } from './config.js';
 import type { CcrStore } from './store.js';
 import type { HeadroomClient } from './proxy-client.js';

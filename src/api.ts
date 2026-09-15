@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { LOG_TAG } from './config.js'
 import type { CcrStore } from './store.js'

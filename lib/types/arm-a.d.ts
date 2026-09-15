@@ -10,7 +10,7 @@
  * Every failure path keeps the original decision untouched (fail-open).
  * @module
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ResolvedConfig } from './config.js';
 import { CcrStore } from './store.js';
 import { HeadroomClient } from './proxy-client.js';

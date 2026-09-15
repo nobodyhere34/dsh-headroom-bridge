@@ -3,14 +3,14 @@ import { existsSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import type { UserConfig } from 'tsdown'
 
-const PLUGIN_ID = '@dsh-external/dsh-headroom-bridge'
+const PLUGIN_ID = '@nobodyhere34/dsh-headroom-bridge'
 
 const CLIENT_EXTERNALS = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',
-  'cordis',
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-runtime/client',
 ]
 
 // The CSS Modules pipeline of the dsh client preset (lightningcss + injected

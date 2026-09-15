@@ -1,7 +1,7 @@
 /** Model-facing consumers: headroom_retrieve. @module */
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedConfig } from './config.js'
 import { LOG_TAG } from './config.js'
 import type { CcrStore } from './store.js'

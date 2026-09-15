@@ -65,7 +65,7 @@ export interface ResolvedConfig {
 }
 
 /** Package identity used for loader naming and storage paths. */
-export const PKG_NAME = '@dsh-external/dsh-headroom-bridge'
+export const PKG_NAME = '@nobodyhere34/dsh-headroom-bridge'
 
 /** Log prefix used across modules. */
 export const LOG_TAG = 'headroom-bridge'
@@ -211,7 +211,7 @@ export function resolveConfig(raw: Config | undefined): ResolvedConfig {
 
 /**
  * Schemastery face for the settings namespace: mirrors the raw Config shape
- * so the web card and installSettingsSection validate the same fields the
+ * so the web card and installSection validate the same fields the
  * loader entry and resolveConfig do. Object keys are optional by schemastery
  * convention; resolution happens in resolveConfig.
  */

@@ -60,7 +60,7 @@ export interface ResolvedConfig {
     readonly ccr: CcrConfig;
 }
 /** Package identity used for loader naming and storage paths. */
-export declare const PKG_NAME = "@dsh-external/dsh-headroom-bridge";
+export declare const PKG_NAME = "@nobodyhere34/dsh-headroom-bridge";
 /** Log prefix used across modules. */
 export declare const LOG_TAG = "headroom-bridge";
 /** Tools owned by this package - their outputs are never compressed. */
@@ -91,7 +91,7 @@ export declare function modeOf(value: unknown): BridgeMode;
 export declare function resolveConfig(raw: Config | undefined): ResolvedConfig;
 /**
  * Schemastery face for the settings namespace: mirrors the raw Config shape
- * so the web card and installSettingsSection validate the same fields the
+ * so the web card and installSection validate the same fields the
  * loader entry and resolveConfig do. Object keys are optional by schemastery
  * convention; resolution happens in resolveConfig.
  */

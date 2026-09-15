@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { ResolvedConfig } from './config.js'
 import { LOG_TAG, OWN_TOOL_NAMES } from './config.js'

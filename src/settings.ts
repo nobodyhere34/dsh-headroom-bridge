@@ -2,19 +2,20 @@
  * Mutable configuration source plus the settings-namespace wiring.
 
  * Arms read configuration through a getter so the web settings card can
- * hot-apply field changes without a fiber rebuild: installSettingsSection
+ * hot-apply field changes without a fiber rebuild: installSection
  * hands us a thunk over the resolved settings scope, and onChange re-resolves
  * it into the same ResolvedConfig validation the loader entry uses.
  * @module
  */
 
-import type { Context } from 'cordis'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { Context } from '@deepseek-ai/cordis'
+// Loads the @deepseek-ai/cordis Context augmentation (settings: SettingsProvider).
+import type {} from '@deepseek-ai/dsh-settings'
 import { resolveConfig, SettingsSchema } from './config.js'
 import type { Config as RawConfig, ResolvedConfig } from './config.js'
 
 /** Settings namespace key shared with the web card. */
-export const HEADROOM_NS = settingsNamespace('headroom')
+export const HEADROOM_NS = 'headroom'
 
 /**
  * Mutable configuration source: arms read get() for the current resolved
@@ -50,12 +51,14 @@ export function createConfigSource(initial: RawConfig | undefined): ConfigSource
  */
 export function installSettings(ctx: Context, source: ConfigSource, entry: RawConfig | undefined): void {
   let current: () => RawConfig = () => entry ?? {}
-  installSettingsSection(ctx, HEADROOM_NS, SettingsSchema, entry ?? {}, {
-    setSource: (thunk) => {
-      current = thunk as unknown as () => RawConfig
-    },
-    onChange: () => {
-      source.setRaw(current())
-    },
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, HEADROOM_NS, SettingsSchema, entry ?? {}, {
+      setSource: (thunk) => {
+        current = thunk
+      },
+      onChange: () => {
+        source.setRaw(current())
+      },
+    })
   })
 }

@@ -6,7 +6,7 @@
  * fetches JSON exactly like the super-injector panel does.
  * @module
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import type { CcrStore } from './store.js';
 import type { HeadroomClient } from './proxy-client.js';
 import type { ConfigSource } from './settings.js';

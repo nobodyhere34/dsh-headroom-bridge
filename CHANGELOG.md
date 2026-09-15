@@ -1,5 +1,16 @@
 # 更新日志 (Changelog)
 
+## 未发布（主线适配 dsh 0.1.5-rc.2）
+
+### 变更
+
+- **适配 dsh 主线 0.1.5-rc.2**：`cordis` → `@deepseek-ai/cordis`；`installSettingsSection`/`settingsNamespace` 助手 → `ctx.settings.installSection`；arm-B 回收改用 rc.2 会话接口（`SessionSeq`/`snapshotEvents()`/`eventAt()`、`surfaceOp: {op:'replace', startSeq, endSeq}`）；client 半 `dsh-client-runtime/client` → `dsh-client-store` + `dsh-client-ui-settings/client`；包名 scope `@dsh-external/` → `@nobodyhere34/`
+- **不再兼容 dsh 0.1.2-rc.1 及更早**（上述接口在旧版不存在）
+
+### 验证
+
+- typecheck + 33 个单元测试全绿；client bundle 构建通过（宿主 checkout detached 在 dsh-v0.1.5-rc.2）
+
 ## v0.1.0 (2026-08-28)
 
 ### 新增
