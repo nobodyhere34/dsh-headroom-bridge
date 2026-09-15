@@ -155,4 +155,10 @@ node --test tests/                                              # 6 unit test su
 
 ## License
 
-[BSD-3-Clause](LICENSE)
+[MIT](LICENSE)
+
+This project's compression approach references [Headroom](https://github.com/headroomlabs-ai/headroom) (Apache-2.0), but copies and ports none of its source code — compression is executed entirely by an external Headroom-compatible proxy over HTTP; the plugin only decides when to compress, what to compress, and how to account for it. Attribution: [NOTICE](NOTICE).
+
+## Acknowledgements
+
+The design and compression strategy reference [Headroom](https://github.com/headroomlabs-ai/headroom) (Apache-2.0).

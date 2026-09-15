@@ -1,0 +1,13 @@
+dsh-headroom-bridge
+Copyright (c) 2026 dsh-headroom-bridge contributors
+
+This product is licensed under the MIT License. See the LICENSE file for the
+full license text.
+
+Attributions:
+
+1. The design and compression strategy of this product reference Headroom
+   (https://github.com/headroomlabs-ai/headroom, Apache License 2.0). No
+   Headroom source code is copied, ported, or bundled: compression is executed
+   by an external Headroom-compatible proxy reached over HTTP. The plugin only
+   decides when to compress, what to compress, and how to account for it.

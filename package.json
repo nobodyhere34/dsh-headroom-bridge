@@ -12,9 +12,10 @@
     "README.en.md",
     "CHANGELOG.md",
     "LICENSE",
+    "NOTICE",
     "cordis.patch.yml"
   ],
-  "license": "BSD-3-Clause",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nobodyhere34/dsh-headroom-bridge.git"

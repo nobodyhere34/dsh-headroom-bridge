@@ -153,6 +153,12 @@ node --test tests/                                              # 6 个单元测
 
 `lib/` 是**提交的构建产物**：改源码后必须重建并把 lib 一起提交。
 
-## License
+## 许可证
 
-[BSD-3-Clause](LICENSE)
+[MIT](LICENSE)
+
+本项目的压缩思路参考 [Headroom](https://github.com/headroomlabs-ai/headroom)（Apache-2.0），但不包含、也不移植 Headroom 的任何源码——压缩全部由外部 Headroom 兼容代理经 HTTP 执行，插件只决定何时压、压什么、怎么记账。归属声明见 [NOTICE](NOTICE)。
+
+## 致谢
+
+设计思路与压缩策略参考 [Headroom](https://github.com/headroomlabs-ai/headroom)（Apache-2.0）。
