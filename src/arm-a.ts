@@ -36,15 +36,34 @@ interface ArmOutcome {
 
 /** Compiles config-backed matchers and owns arm state for one plugin fiber. */
 class ArmAState {
-  readonly excludeToolRe: RegExp[]
-  readonly protectPathRe: RegExp[]
+  private excludeSource: readonly string[] | undefined
+  private excludeToolRe: RegExp[] = []
+  private protectSource: readonly string[] | undefined
+  private protectPathRe: RegExp[] = []
   private readonly attempts = new Map<string, true>()
   private inflight = 0
 
-  constructor(private readonly getConfig: () => ResolvedConfig) {
-    this.excludeToolRe = compileGlobs(this.getConfig().excludeTools)
-    this.protectPathRe = compileGlobs(this.getConfig().protectPathGlobs)
+  constructor(private readonly getConfig: () => ResolvedConfig) {}
+
+  /**
+   * Re-glob the config-backed matchers when a new resolution replaced the
+   * arrays (resolveConfig freezes a fresh array per call, so identity change
+   * marks a config edit; hot card/settings edits take effect on the next
+   * candidate exactly like arm B).
+   */
+  refresh(cfg: ResolvedConfig): void {
+    if (cfg.excludeTools !== this.excludeSource) {
+      this.excludeSource = cfg.excludeTools
+      this.excludeToolRe = compileGlobs(cfg.excludeTools)
+    }
+    if (cfg.protectPathGlobs !== this.protectSource) {
+      this.protectSource = cfg.protectPathGlobs
+      this.protectPathRe = compileGlobs(cfg.protectPathGlobs)
+    }
   }
+
+  get excludeToolReList(): readonly RegExp[] { return this.excludeToolRe }
+  get protectPathReList(): readonly RegExp[] { return this.protectPathRe }
 
   /** Mark-and-check one callId: true on first sight, false afterwards. */
   firstAttempt(callId: string): boolean {
@@ -172,6 +191,7 @@ export function installArmA(
     const decision = await next()
     try {
       const cfg = getConfig()
+      state.refresh(cfg)
       if (decision.kind !== 'accept') return decision
 
       const toolName = effectiveToolName(exec)
@@ -186,8 +206,8 @@ export function installArmA(
         protectErrorOutputs: cfg.protectErrorOutputs,
         text,
         minChars: cfg.minChars,
-        excludeToolRe: state.excludeToolRe,
-        protectPathRe: state.protectPathRe,
+        excludeToolRe: state.excludeToolReList,
+        protectPathRe: state.protectPathReList,
         args: exec.arguments,
       })
       if (skip !== null) {

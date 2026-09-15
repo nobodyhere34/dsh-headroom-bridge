@@ -41,6 +41,7 @@
     "build": "bash scripts/build.sh",
     "build:client": "tsdown -c tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test tests/*.test.js",
     "check": "npm run typecheck && npm run build && npm run build:client"
   },
   "dependencies": {

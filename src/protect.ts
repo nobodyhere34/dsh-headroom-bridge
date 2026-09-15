@@ -16,16 +16,24 @@ export type SkipReason =
   | 'inflight-cap'
   | 'duplicate-attempt'
 
-/** Argument keys whose values may carry file paths. */
-const PATH_ARG_KEYS = new Set([
-  'path', 'file_path', 'filePath', 'file', 'filename', 'old_path', 'new_path',
-  'src', 'source', 'target', 'dest', 'destination', 'directory', 'dir',
-  'root', 'cwd', 'folder', 'notebook_path',
-])
+/** Strings above this size keep only the whole/basename check, never token scan. */
+export const TOKEN_SCAN_MAX_CHARS = 16_384
+const TOKEN_SCAN_MAX_TOKENS = 1024
+const EMBEDDED_JSON_MAX_CHARS = 8_192
 
 function collectPathValues(value: unknown, seen: Set<object>, out: string[]): void {
   if (typeof value === 'string') {
-    if (value.includes('/') || value.includes('\\')) out.push(value)
+    out.push(value)
+    // Tool bridges may pass nested arguments as a JSON string; parse back so
+    // protected paths inside it are still seen (bounded, fail-open).
+    const first = value.charCodeAt(0)
+    if (value.length <= EMBEDDED_JSON_MAX_CHARS && (first === 123 || first === 91)) {
+      try {
+        collectPathValues(JSON.parse(value), seen, out)
+      } catch {
+        // not embedded JSON: the whole string is already a candidate
+      }
+    }
     return
   }
   if (value === null || typeof value !== 'object') return
@@ -35,10 +43,7 @@ function collectPathValues(value: unknown, seen: Set<object>, out: string[]): vo
     for (const item of value) collectPathValues(item, seen, out)
     return
   }
-  for (const [key, child] of Object.entries(value)) {
-    collectPathValues(child, seen, out)
-    if (PATH_ARG_KEYS.has(key) && typeof child === 'string') out.push(child)
-  }
+  for (const [, child] of Object.entries(value)) collectPathValues(child, seen, out)
 }
 
 /** Basename of a POSIX/Windows-style path. */
@@ -49,19 +54,41 @@ function basename(p: string): string {
 }
 
 /**
- * Whether any path-shaped argument hits a protected glob, compared against the
- * full value and its basename so bare names in path-typed args still match.
+ * Whole argument strings are useless as one path for shell commands (the
+ * basename of `cat /a/b/x.json | head` is `head`), so each string is also
+ * split into shell-word-ish tokens and every token is tried whole and by
+ * basename. Oversized strings keep the whole/basename check only.
+ */
+const TOKEN_SPLIT_RE = /[\s|;&()<>\n]+/
+const TOKEN_LEAD_STRIP_RE = /^['"`([{,:]+/
+const TOKEN_TRAIL_STRIP_RE = /['"`)\]},;:]+$/
+
+/**
+ * Whether any argument string (whole, basename, or any shell token thereof)
+ * hits a protected glob. Errs toward protection: more matches means fewer
+ * compressions, never wrong ones.
  */
 export function argsHitProtectedPaths(args: unknown, globs: readonly RegExp[]): boolean {
   if (globs.length === 0 || args === null || typeof args !== 'object') return false
   const values: string[] = []
   collectPathValues(args, new Set(), values)
-  return values.some((value) => {
+  for (const value of values) {
     const normalized = value.replace(/\\/g, '/')
     if (matchesAny(normalized, globs)) return true
     const base = basename(normalized)
-    return base.length > 0 && base !== normalized && matchesAny(base, globs)
-  })
+    if (base.length > 0 && base !== normalized && matchesAny(base, globs)) return true
+    if (normalized.length > TOKEN_SCAN_MAX_CHARS) continue
+    const tokens = normalized.split(TOKEN_SPLIT_RE)
+    const limit = Math.min(tokens.length, TOKEN_SCAN_MAX_TOKENS)
+    for (let i = 0; i < limit; i++) {
+      const token = tokens[i].replace(TOKEN_LEAD_STRIP_RE, '').replace(TOKEN_TRAIL_STRIP_RE, '')
+      if (token.length === 0 || token === normalized) continue
+      if (matchesAny(token, globs)) return true
+      const tokenBase = basename(token)
+      if (tokenBase !== token && matchesAny(tokenBase, globs)) return true
+    }
+  }
+  return false
 }
 
 /**

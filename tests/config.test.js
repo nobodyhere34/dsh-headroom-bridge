@@ -48,3 +48,10 @@ test('modeOf accepts audit and live only', () => {
   assert.equal(modeOf('live'), 'live')
   assert.throws(() => modeOf('aggressive'))
 })
+
+test('protection lists reject empty-array overrides', () => {
+  assert.throws(() => resolveConfig({ excludeTools: [] }), /at least one entry/)
+  assert.throws(() => resolveConfig({ protectPathGlobs: [] }), /at least one entry/)
+  // a placeholder override remains legal
+  assert.deepEqual(resolveConfig({ excludeTools: ['__none__'] }).excludeTools, ['__none__'])
+})

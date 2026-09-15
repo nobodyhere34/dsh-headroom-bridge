@@ -104,3 +104,36 @@ test('armA respects excluded tools', async () => {
   assert.equal(store.stats().entries, 0)
   rmSync(dir, { recursive: true, force: true })
 })
+test('armA recompiles matchers when config is hot-edited', async () => {
+  const captured = []
+  const ctx = { on(ev, fn) { captured.push({ ev, fn }); return () => {} }, logger: quiet }
+  const dir = mkdtempSync(join(tmpdir(), 'hb-arma-'))
+  const store = new CcrStore({ enabled: true, ttlMs: 60000, maxEntries: 10, path: join(dir, 'ccr.json'), logger: quiet })
+  store.init()
+  const counters = newCounters()
+  const responses = []
+  const client = {
+    async compressToolMessage() {
+      const r = responses.shift()
+      if (!r) throw new Error('no mock response')
+      return r
+    },
+  }
+  let cfg = resolveConfig({ mode: 'live', minChars: 100, minSavingsRatio: 0.1, excludeTools: ['__none__'] })
+  installArmA(ctx, () => cfg, store, () => client, counters)
+  const [entry] = captured.filter((c) => c.ev === 'tools/post-execute')
+  const result = { isError: false, content: [{ type: 'text', text: 'q'.repeat(2000) }] }
+
+  // custom exclude list without 'read': a read result is adopted
+  responses.push(goodResponse)
+  const d1 = await entry.fn(exec({ name: 'read', callId: 'c1' }), result, async () => ({ kind: 'accept' }))
+  assert.ok(d1.content[0].text.includes('[headroom-bridge:'), 'custom list active')
+
+  // hot-edit to default excludes: next read candidate must be excluded
+  cfg = resolveConfig({ mode: 'live', minChars: 100, minSavingsRatio: 0.1 })
+  const downstream = { kind: 'accept' }
+  const d2 = await entry.fn(exec({ name: 'read', callId: 'c2' }), result, async () => downstream)
+  assert.equal(d2, downstream)
+  assert.equal(counters.adopted, 1)
+  rmSync(dir, { recursive: true, force: true })
+})

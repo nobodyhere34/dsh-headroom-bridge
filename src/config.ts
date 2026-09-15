@@ -166,6 +166,19 @@ function stringArray(value: unknown, fallback: readonly string[], label: string)
   })
 }
 
+/**
+ * Protection lists must never be emptied: `[] ?? fallback` silently passes an
+ * empty array through, which once disabled the whole read/path gates in the
+ * field. Neutralizing a list means an unused placeholder name, not [].
+ */
+function stringArrayNonEmpty(value: unknown, fallback: readonly string[], label: string): string[] {
+  const resolved = stringArray(value, fallback, label)
+  if (resolved.length === 0) {
+    throw new Error(LOG_TAG + ": " + label + " must keep at least one entry (neutralize with an unused placeholder instead of [])")
+  }
+  return resolved
+}
+
 /** Validate one mode value. */
 export function modeOf(value: unknown): BridgeMode {
   if (value === undefined || value === null) return "audit"
@@ -190,9 +203,9 @@ export function resolveConfig(raw: Config | undefined): ResolvedConfig {
     timeoutMs: positiveInt(src.timeoutMs, 30_000, "timeoutMs"),
     minChars: positiveInt(src.minChars, 500, "minChars"),
     minSavingsRatio: ratio01(src.minSavingsRatio, 0.15, "minSavingsRatio"),
-    excludeTools: Object.freeze(stringArray(src.excludeTools, DEFAULT_EXCLUDE_TOOLS, "excludeTools")),
+    excludeTools: Object.freeze(stringArrayNonEmpty(src.excludeTools, DEFAULT_EXCLUDE_TOOLS, "excludeTools")),
     protectErrorOutputs: bool(src.protectErrorOutputs, true, "protectErrorOutputs"),
-    protectPathGlobs: Object.freeze(stringArray(src.protectPathGlobs, DEFAULT_PROTECT_PATH_GLOBS, "protectPathGlobs")),
+    protectPathGlobs: Object.freeze(stringArrayNonEmpty(src.protectPathGlobs, DEFAULT_PROTECT_PATH_GLOBS, "protectPathGlobs")),
     maxInflight: positiveInt(src.maxInflight, 2, "maxInflight"),
     armB: Object.freeze({
       enabled: bool(armBRaw.enabled, true, 'armB.enabled'),

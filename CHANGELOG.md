@@ -1,5 +1,21 @@
 # 更新日志 (Changelog)
 
+## Unreleased
+
+### 修复（止损）
+
+- **路径保护门对 bash 整条命令失效**：`protectPathGlobs` 此前把整个 `command` 字符串当一个路径取 basename（`cat /a/x.json | head` 取到 `head`），shell 里 cat/sed 源码/配置文件全部漏保护。改为逐 shell-token 切分（剥引号/管道/分号，整词 + basename 双试），命中即 `protected-path`；>16KB 的超长参数串只保留整串/basename 检查（预算护栏，行为已文档化）。工具参数为内嵌 JSON 字符串（`tool_call` 桥接形态）时也先 parse 再扫。方向性错误一律偏向保护（宁少压、不错压）
+- **`excludeTools` / `protectPathGlobs` 不再允许显式清空成 `[]`**（`[] ?? fallback` 会静默放行空表，等于拆掉保护门；现在配置校验直接拒绝，中和某项请用占位名如 `["__none__"]`）
+- **A 臂排除/保护正则改为按配置身份惰性重编译**：卡片/配置文件热改这两张表后下一候选即生效（与 B 臂行为一致），不再需要重载插件
+
+### 变更
+
+- `npm test` 脚本新增（`node --test tests/` 目录形态在 Node 22 下不可用，文档统一为 `tests/*.test.js`）
+
+### 验证
+
+- typecheck + 38 个单元测试全绿（新增 5 例：bash token 化命中 × 引号/管道/相对路径/负例、内嵌 JSON 解包、超长预算上限、空数组拒绝、A 臂热重编译）
+
 ## v0.1.1 (2026-09-15)
 
 ### 变更

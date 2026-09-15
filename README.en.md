@@ -113,7 +113,7 @@ This project's trade: compressors, content routing, and CCR storage all live on 
 - The proxy is a hard dependency: if it's down, everything is fail-open and results pass through (sessions unaffected; the card shows unhealthy)
 - Default is `audit`; you must switch to `live` to save tokens
 - `enabled` is a load-time switch: false at load → the plugin mounts nothing (no hooks, no tools, no card); turning it off on the card does not stop the currently running instance
-- Changes to `excludeTools` / `protectPathGlobs` / `ccr.*` require a plugin reload
+- Changes to `ccr.*` require a plugin reload; `excludeTools` / `protectPathGlobs` hot-edit takes effect immediately (both arms resync per candidate), and **cannot be emptied to `[]`** (emptying them removes the protection gate, so validation rejects it — neutralize an entry with an unused placeholder instead)
 - `live` + `ccr.enabled: false` = zero adoption (adoption asserts the original is in the ledger first; with the ledger off it always fails) — don't configure it that way
 - Read-family tools and source/config-path results are not compressed by default (byte-sensitive scenes stay verbatim)
 - KV cache: a `live` replacement invalidates the cache from the first changed token (a cost shared by any tool-result rewrite); `audit` has no impact
@@ -122,7 +122,7 @@ This project's trade: compressors, content routing, and CCR storage all live on 
 
 ## Compatibility
 
-- DSH: the current code is adapted to and verified against mainline **dsh-v0.1.5-rc.2** (typecheck + 33 unit tests green). The adaptation uses rc.2-only interface shapes (`SessionSeq`/`snapshotEvents()`/`eventAt()`, `surfaceOp: {op:'replace', startSeq, endSeq}`, `ctx.settings.installSection`, the `@deepseek-ai/cordis` package name) and **no longer supports 0.1.2-rc.1 or earlier** — those call sites fail outright on older hosts
+- DSH: the current code is adapted to and verified against mainline **dsh-v0.1.5-rc.2** (typecheck + 38 unit tests green). The adaptation uses rc.2-only interface shapes (`SessionSeq`/`snapshotEvents()`/`eventAt()`, `surfaceOp: {op:'replace', startSeq, endSeq}`, `ctx.settings.installSection`, the `@deepseek-ai/cordis` package name) and **no longer supports 0.1.2-rc.1 or earlier** — those call sites fail outright on older hosts
 - headroom proxy: official `0.36.5-code` **verified**. 0.37.0 makes `/v1/compress` session-aware (sidecar) and fixes subagent output garbling (#3286); upgrade compatibility is **not evaluated**
 - This repo is at 0.1.1 (GitHub tag `v0.1.1`); 0.1.0 was the untagged initial form — don't read compatibility off its peer declarations
 
@@ -148,7 +148,7 @@ Build, test, hot-assembly, and release workflow: [docs/DEV.md](docs/DEV.md). Qui
 DSH_CHECKOUT=/path/to/deepseek-harness bash scripts/build.sh   # src → lib (host half)
 pnpm run build:client                                           # src/client → lib/client.js
 pnpm run typecheck
-node --test tests/                                              # 6 unit test suites
+node --test tests/*.test.js                                     # unit test suites (or npm test)
 ```
 
 `lib/` is a **committed build artifact**: after changing sources, rebuild and commit lib along with them.

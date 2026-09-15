@@ -58,3 +58,21 @@ test('strong error hints protect unflagged output within the ceiling', () => {
   const long = trace + 'z'.repeat(9000)
   assert.equal(evaluateGates({ ...base, text: long }), null)
 })
+
+test('bash command strings match protected paths per token', () => {
+  assert.equal(evaluateGates({ ...base, toolName: 'bash', args: { command: 'cat /root/.dsh/settings.json | sed -n 88,100p' } }), 'protected-path')
+  assert.equal(evaluateGates({ ...base, toolName: 'bash', args: { command: 'echo "hello"; cat \'/a/b/app.ts\' | wc -l' } }), 'protected-path')
+  assert.equal(evaluateGates({ ...base, toolName: 'bash', args: { command: 'grep -rn thing . | head; ls app.ts' } }), 'protected-path')
+  assert.equal(evaluateGates({ ...base, toolName: 'bash', args: { command: 'echo hello world && pwd' } }), null)
+})
+
+test('embedded JSON argument strings are unwrapped', () => {
+  const args = { name: 'read', arguments: '{"file_path":"/srv/project/module.ts"}' }
+  assert.equal(evaluateGates({ ...base, toolName: 'tool_call', args }), 'protected-path')
+})
+
+test('oversized command strings skip the token scan (documented cap)', () => {
+  const long = '/a/b/app.ts ' + 'x '.repeat(9000)
+  assert.ok(long.length > 16_384)
+  assert.equal(evaluateGates({ ...base, toolName: 'bash', args: { command: long } }), null)
+})

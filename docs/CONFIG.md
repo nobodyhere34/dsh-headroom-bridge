@@ -20,9 +20,9 @@ schema 默认值 → 入口配置（cordis.patch.yml 的 config: 段）→ 用�
 | timeoutMs | 正整数 | 30000 | 立即 | 可 |
 | minChars | 正整数 | 500 | 立即 | 可 |
 | minSavingsRatio | 0..1 | 0.15 | 立即 | 可 |
-| excludeTools | string[]（glob） | 见下（12 个） | **重载插件**（A 臂构建时预编译正则） | 不可 |
+| excludeTools | string[]（glob） | 见下（12 个） | 立即（A 臂按配置身份惰性重编译，与 B 臂同步） | 不可 |
 | protectErrorOutputs | bool | true | 立即 | 可 |
-| protectPathGlobs | string[]（glob） | 见下（26 个） | **重载插件**（同上） | 不可 |
+| protectPathGlobs | string[]（glob） | 见下（26 个） | 立即（同上） | 不可 |
 | maxInflight | 正整数 | 2 | 立即 | 不可 |
 | armB.enabled | bool | true | 立即 | 不可 |
 | armB.thresholdChars | 正整数 | 16384 | 立即 | 不可 |
@@ -34,6 +34,8 @@ schema 默认值 → 入口配置（cordis.patch.yml 的 config: 段）→ 用�
 | ccr.path | string | 空 = <DSH_HOME>/storages/dsh-headroom-bridge-ccr.json | **重载插件**；**必须绝对路径**，相对值被忽略 | 不可 |
 
 「立即」= 保存卡片后对之后的候选生效；「重载插件」= 重新装载插件（重启 dsh web 或注入器热重载）才生效。
+
+`excludeTools` / `protectPathGlobs` **不允许显式清空成 `[]`**（空表等于拆掉保护门，配置校验直接拒绝；要中和某项请换成用不到的占位名，如 `["__none__"]`）。
 
 ### 默认 excludeTools
 
@@ -78,7 +80,7 @@ headroom_retrieve 永远不压，不在此表里。
 
 1. **enabled 不是运行期开关**。装载时读一次：false 装载 = 什么都不挂（连卡片都没有）。运行中在卡片关掉，当前实例继续工作，下次装载才停。
 2. **live + ccr.enabled: false = 零采纳**。采纳前断言「原文已可赎回」，台账关闭时这条断言必失败 → 每次尝试都 fail-open 计失败。要压缩就保持台账开（默认就是开的）。
-3. **热 / 重载边界**：卡片能改的字段里只有 enabled 是重载语义；excludeTools、protectPathGlobs、ccr.* 卡片改不了，改配置文件后也要重载。
+3. **热 / 重载边界**：卡片能改的字段里只有 enabled 是重载语义；excludeTools、protectPathGlobs 卡片改不了，但改配置文件/入口后**立即生效**（A 臂按配置身份惰性重编译，不再需要重载）；只有 ccr.* 改了要重载。
 4. **ccr.path 写相对路径会被静默忽略**，回落到默认位置。
 5. **台账写入是 1 秒防抖**的（tmp 文件 + rename 原子写）。进程在防抖窗口内被 kill，最近约 1 秒的条目可能丢；正常卸载会立即 flush。
 6. **原子写用 os.tmpdir() 中转**：如果 tmp 目录和 DSH_HOME 不在同一文件系统（EXDEV），降级为纯内存台账（有 warn 日志）——重启后台账为空。
