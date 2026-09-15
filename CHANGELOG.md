@@ -5,6 +5,7 @@
 ### 变更
 
 - **适配 dsh 主线 0.1.5-rc.2**：`cordis` → `@deepseek-ai/cordis`；`installSettingsSection`/`settingsNamespace` 助手 → `ctx.settings.installSection`；arm-B 回收改用 rc.2 会话接口（`SessionSeq`/`snapshotEvents()`/`eventAt()`、`surfaceOp: {op:'replace', startSeq, endSeq}`）；client 半 `dsh-client-runtime/client` → `dsh-client-store` + `dsh-client-ui-settings/client`；包名 scope `@dsh-external/` → `@nobodyhere34/`
+- **许可证 BSD-3-Clause → MIT**：本项目不移植、不打包 Headroom 源码（压缩由外部兼容代理经 HTTP 执行），MIT 与上游合规无冲突；新增 `NOTICE` 记录 Headroom（Apache-2.0）设计归属
 - **不再兼容 dsh 0.1.2-rc.1 及更早**（上述接口在旧版不存在）
 
 ### 验证
