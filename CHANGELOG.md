@@ -1,5 +1,17 @@
 # 更新日志 (Changelog)
 
+## v0.1.3 (2026-09-16)
+
+### 修复（回归止损）
+
+- **v0.1.2 的"空数组拒绝"回归导致设置卡片消失**：schemastery 解析 settings scope 时会把未设置的数组字段物化为 `[]`（`excludeTools: []`、`protectPathGlobs: []`），而 `installSection` 注册命名空间后会同步调用 `onChange` → `resolveConfig(物化[])` 撞上 v0.1.2 新加的强校验直接 throw → settings 注入 fiber 崩死、`headroom` 命名空间注册作废 → 插件配置卡片在**每次启动**都不出现，且运行态永远停在 entry 基线（mode 卡在 audit）。语义改为：**空数组回退内置默认列表**——保护门依然永不为空（安全意图不变），但不再 throw；非法条目类型（非字符串/空白/带首尾空格）照旧强报错。中和某项请使用占位名（如 `["__none__"]`）
+- 事故全程诊断与结案报告见 `docs/research/injector-incident-2026-09-16.md`（含给全生态的教训：接入 `installSection.onChange` 的配置校验必须容忍 schemastery 物化的容器默认值 `[]` / `{}`，否则启动必炸卡片）
+
+### 验证
+
+- 38 个单元测试全绿（`protection lists fall back to defaults on empty arrays` 用例改为直接喂 schemastery 物化形状做回归）
+- 运行态热重载回归：`headroom` 命名空间注册 ✓、用户层 `mode: live` 覆盖 entry 基线 ✓、`/headroom-bridge/api/stats` 报 live ✓
+
 ## v0.1.2 (2026-09-15)
 
 ### 修复（止损）

@@ -31,8 +31,8 @@ docker run -d --name headroom --network host ghcr.io/headroomlabs-ai/headroom:0.
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # 本地目录
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.2'  # GitHub tag
-pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.2.tgz # tarball
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.3'  # GitHub tag
+pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.3.tgz # tarball
 ```
 
 然后**重启 `dsh web`**。
@@ -113,7 +113,7 @@ live 采纳后模型看到的是压缩文本 + 一行标记：
 - 代理是硬依赖：挂了全部 fail-open，结果原样通过（会话不受影响，卡片显示不健康）
 - 默认 `audit`；要真正省 token 必须切 `live`
 - `enabled` 是装载期开关：装载时 false → 插件什么都不挂（无钩子、无工具、无卡片）；卡片里关掉不影响当前运行中的实例
-- `ccr.*` 改了要重载插件；`excludeTools` / `protectPathGlobs` 热改即时生效（A/B 两臂每候选同步），且**不允许清空成 `[]`**（清空等于拆掉保护门，配置校验直接拒绝；要中和某项就换成用不到的占位名）
+- `ccr.*` 改了要重载插件；`excludeTools` / `protectPathGlobs` 热改即时生效（A/B 两臂每候选同步）。**空数组 `[]` 一律回退内置默认列表**（保护门永远不会被清空；要中和某项就换成用不到的占位名），非法条目类型仍会报错
 - `live` + `ccr.enabled: false` = 零采纳（采纳前断言原文已入台账，台账关了必失败）——别这么配
 - 读取类工具和源码/配置路径的结果默认不压（字节敏感场景不压）
 - KV 缓存：`live` 替换会从第一个被改 token 起失效缓存（任何工具结果重写的共性代价）；`audit` 无影响
@@ -124,7 +124,7 @@ live 采纳后模型看到的是压缩文本 + 一行标记：
 
 - DSH：当前代码在主线 **dsh-v0.1.5-rc.2** 上适配并验证（typecheck + 38 个单元测试全绿）。适配用了 rc.2 才有的接口形态（`SessionSeq`/`snapshotEvents()`/`eventAt()`、`surfaceOp: {op:'replace', startSeq, endSeq}`、`ctx.settings.installSection`、`@deepseek-ai/cordis` 包名），**不再兼容 0.1.2-rc.1 及更早**——旧版上这些调用点会直接报错
 - headroom 代理：官方 `0.36.5-code` **验证过**。0.37.0 把 `/v1/compress` 改成了会话感知（sidecar）、并修复子代理输出乱码（#3286）；升级兼容性**未评估**
-- 本仓库当前 0.1.2（GitHub tag `v0.1.2`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
+- 本仓库当前 0.1.3（GitHub tag `v0.1.3`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
 
 ## FAQ
 
