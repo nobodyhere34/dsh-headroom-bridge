@@ -31,11 +31,14 @@ schema 默认值 → 入口配置（cordis.patch.yml 的 config: 段）→ 用�
 | ccr.enabled | bool | true | **重载插件**（台账构建时定型） | 不可 |
 | ccr.ttlMs | 正整数 | 86400000（24h） | **重载插件** | 不可 |
 | ccr.maxEntries | 正整数 | 2000 | **重载插件** | 不可 |
-| ccr.path | string | 空 = <DSH_HOME>/storages/dsh-headroom-bridge-ccr.json | **重载插件**；**必须绝对路径**，相对值被忽略 | 不可 |
+| ccr.maxBytes | 正整数 | 67108864（64 MiB） | **重载插件** | 不可 |
+| ccr.auditKeep | 正整数 | 2000 | **重载插件** | 不可 |
+| ccr.gcIntervalMs | 正整数 | 60000 | **重载插件** | 不可 |
+| ccr.path | string | 空 = <DSH_HOME>/storages/dsh-headroom-bridge-ccr.db | **重载插件**；**必须绝对路径**，相对值被忽略 | 不可 |
 
 「立即」= 保存卡片后对之后的候选生效；「重载插件」= 重新装载插件（重启 dsh web 或注入器热重载）才生效。
 
-`excludeTools` / `protectPathGlobs` **不允许显式清空成 `[]`**（空表等于拆掉保护门，配置校验直接拒绝；要中和某项请换成用不到的占位名，如 `["__none__"]`）。
+`excludeTools` / `protectPathGlobs` **空数组 `[]` 一律回退内置默认列表**（保护门永不为空；要中和某项请换成用不到的占位名，如 `["__none__"]`）。非法条目类型仍拒绝写入。
 
 ### 默认 excludeTools
 
@@ -82,10 +85,12 @@ headroom_retrieve 永远不压，不在此表里。
 2. **live + ccr.enabled: false = 零采纳**。采纳前断言「原文已可赎回」，台账关闭时这条断言必失败 → 每次尝试都 fail-open 计失败。要压缩就保持台账开（默认就是开的）。
 3. **热 / 重载边界**：卡片能改的字段里只有 enabled 是重载语义；excludeTools、protectPathGlobs 卡片改不了，但改配置文件/入口后**立即生效**（A 臂按配置身份惰性重编译，不再需要重载）；只有 ccr.* 改了要重载。
 4. **ccr.path 写相对路径会被静默忽略**，回落到默认位置。
-5. **台账写入是 1 秒防抖**的（tmp 文件 + rename 原子写）。进程在防抖窗口内被 kill，最近约 1 秒的条目可能丢；正常卸载会立即 flush。
-6. **原子写用 os.tmpdir() 中转**：如果 tmp 目录和 DSH_HOME 不在同一文件系统（EXDEV），降级为纯内存台账（有 warn 日志）——重启后台账为空。
-7. **台账是全局的**：跨 profile/会话共享，按内容去重，驱逐只看写入时间。
-8. **校验失败 = 拒绝写入**：数字要正安全整数、比例要在 0..1、字符串数组元素要非空且无首尾空白。卡片保存失败会保留草稿。
+5. **台账是 SQLite 库**（`node:sqlite`，零外部依赖，WAL 模式）。写入即时提交，不再有 JSON 防抖丢窗口的问题；进程被 kill 也只丢最近一条未提交事务。首次启动会自动把旧的 `dsh-headroom-bridge-ccr.json` 一次性导入并改名为 `.imported`。
+6. **写前压缩不变式**：live 采纳前必先「原文入台账 + 读回确认」，台账写不进就 fail-open 不替换——轨迹里出现的每个压缩标记，其原文都保证过一度入台账。
+7. **有界无损 + 生命周期联动**：台账全局共享、按内容去重；`ccr.maxBytes`（默认 64 MiB）超预算或 `ccr.ttlMs`（默认 24h 新鲜窗）过期时，原文降级为元数据（`degraded`，条目仍在、血缘/压缩类型/前后字符数不丢，只是取不回全文）；淘汰按最久未访问优先。压缩出窗（`compaction/summary`/`prune`）触发一次即时回收，另有 `ccr.gcIntervalMs` 定期回收。
+8. **会话删除级联**：与 dsh-session-manager 联动——监听 `dsh_delete_session` 域写入，**每个事件对回收站快照全量幂等级联**（重启后第一个删除也不错过），会话进回收站即清掉其全部台账行；每小时另与 `sessionPersistence.list()` 对账扫孤儿。删除后即使会话恢复，其台账也不回来（有意为之）。
+9. **血缘链两端**：台账行带 `session_id`/`call_id`（A/B 臂写入即带）与压缩类型（代理 `transforms_applied`）；「哪一轮压了什么」经两条已活体验证的连接还原——`call_id → tool/call 事件 → turn` 与 `hash → 事件内 marker → 事件 seq`（轨迹 chip 投影即后者活实现，含 B 臂 surface 替换按原轮归因）。A 臂行落库早于 durable 事件生成（post-execute 语义），seq 仅 B 臂行与投影侧可得——设计使然。
+10. **校验失败 = 拒绝写入**：数字要正安全整数、比例要在 0..1、字符串数组元素要非空且无首尾空白。卡片保存失败会保留草稿。
 
 ## 示例
 
@@ -99,8 +104,9 @@ headroom:
     thresholdChars: 12000
     maxPerStep: 3
   ccr:
-    ttlMs: 604800000            # 7 天
-    path: /data/dsh-ccr.json    # 必须绝对路径
+    ttlMs: 604800000            # 7 天新鲜窗
+    maxBytes: 268435456         # 256 MiB 原文预算
+    path: /data/dsh-ccr.db      # 必须绝对路径
 ```
 
 ```yaml

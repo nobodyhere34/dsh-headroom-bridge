@@ -57,6 +57,9 @@ link_pkg @deepseek-ai/dsh-settings packages/settings/settings
 link_pkg @deepseek-ai/dsh-host-webserver packages/host/webserver
 link_pkg @deepseek-ai/dsh-llm packages/llm/llm
 link_pkg @deepseek-ai/dsh-system-prompt packages/core/system-prompt
+link_pkg @deepseek-ai/dsh-client-ui-chat packages/client/ui-chat
+link_pkg @deepseek-ai/dsh-client-ui-conversation packages/client/ui-conversation
+link_pkg @deepseek-ai/dsh-api-session-controller packages/api/session-controller
 # @types/node（编译类型；checkout 自带）
 link_pkg @types/node node_modules/@types/node
 

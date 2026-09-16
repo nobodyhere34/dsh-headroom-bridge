@@ -60,16 +60,66 @@
 
 .ledgerRow {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 2px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
   line-height: 1.6;
   color: var(--dsw-alias-label-secondary);
 }
 
+.ledgerHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 1px 2px;
+  margin: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.ledgerHead:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.ledgerHead:not(:disabled):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.pre {
+  max-height: 200px;
+  overflow: auto;
+  margin: 2px 0 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
 .ledgerHash {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.sessionLink {
+  flex: none;
+  color: var(--dsw-alias-accent);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.sessionLink:hover {
+  text-decoration: underline;
 }

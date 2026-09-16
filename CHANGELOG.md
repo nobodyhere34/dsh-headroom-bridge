@@ -1,5 +1,35 @@
 # 更新日志 (Changelog)
 
+## v0.2.0 (2026-09-16)
+
+主题：**轨迹完整性三件套**——压缩从"只有一行 marker"变成全程可见、可审计、可回溯。
+
+### 新增
+
+- **CCR 台账 SQLite 化**（`node:sqlite` 内置，零外部依赖，WAL）：每条带 `session_id`/`call_id` 血缘与压缩类型（代理 `transforms_applied` 链）；旧的 `dsh-headroom-bridge-ccr.json` 首次启动自动导入并改名 `.imported`
+- **有界保留 + 生命周期联动**：`ccr.maxBytes`（默认 64 MiB）原文预算、`ccr.auditKeep`、`ccr.gcIntervalMs`（默认 60s）；超预算/过新鲜窗（`ttlMs` 默认 24h）时**原文降级为元数据**（血缘/类型/前后字符数保留，全文不再可取），按最久未访问优先。`compaction/summary`/`compaction/prune` 事件触发即时回收（模型取回需求只发生在窗口内，出窗原文让位预算）
+- **会话删除级联**：与 dsh-session-manager 联动——监听 `dsh_delete_session` 域写入，会话进回收站即清掉其全部台账行；另有每小时与 `sessionPersistence.list()` 对账扫孤儿（session-query-sqlite 同款先例）
+- **attempt 审计**：adopted/not-adopted（below-min-savings / mode-audit）/skipped（protected-path / error-output / already-compressed）/empty-response/inflight-cap/failed 全量落 `audit` 表（环形保留 `ccr.auditKeep` 条）——"为什么没压"从此有据可查
+- **设置卡片"近期操作"面板**：台账+审计合并流（`GET /headroom-bridge/api/ledger/activity`），逐条展开对比压缩前原文（`GET /ledger/entry`）/压缩类型/字节数，带来源会话跳转（`uiWorkspace.openSession` 深链，无工作区 UI 时自动隐藏）
+- **轨迹压缩 chip（双视图）**：①聊天视图——被压缩轮末尾（`conversation.chat.turnTail` 链槽）出现 headroom chip（事件投影同步判定，与 deliverables 同款机制、链序在其之后互不抢占）；②轨迹视图（试用反馈驱动新增）——ui-trajectory 无插件扩展位，按生态 direct-DOM 先例（dsh-session-manager 同款机制）给被压缩的工具行挂同款气泡：**行按身份匹配**（`data-trajectory-row-key` 的 `kind\0call\0callId` 对台账 callId，绝不按文本扫——摘要列可能截断 marker），数据源即本会话台账（`GET /ledger/activity?session=`，降级条目仍显示并标注原文过期）
+- API 面：`/ledger/activity`（含 `?session=` **查询下推**过滤，繁忙全局流不再挤掉本会话行）、`/ledger/entry`、stats 增 `demoted`/`bytesLive`
+- **降级行的诚实赎回**：`headroom_retrieve` 对已降级/出窗的 hash 不再报"从未存在"，detail 引述保留的血缘（工具名、前后字符、压缩类型）并跳过对桥自造 hash 的无谓代理一跳；API/工具/UI 三视图对同一行的可赎回判定统一为单一判据（degraded 或过期或无文本），永不互相打架
+
+### 变更
+
+- `ccr.path` 默认值改为 `…-ccr.db`；`flush()` 变 no-op（SQLite 即时提交，1 秒防抖窗口连同"kill 丢 1 秒条目"的问题一起消失）；EXDEV 降级路径不再存在
+- 台账超限时从"整条驱逐"改为"原文降级、条目留存"：轨迹账本无损，有界的只是原文体积
+
+- **`↗` 深链直达轨迹锚点（试用反馈驱动）**：双路径。**冷挂载**：打开会话前预写 ui-conversation 的持久化偏好（`dsh.conversation.<sessionId>` 整值 JSON：`view:'trajectory'` + `viewRequest{focus:callId}`），store 首挂载即水合、走 TrajectoryView 官方 inspect-focus（自动展开历史直到该工具调用）。**热挂载**（该会话本轮浏览器已挂载过、store 缓存不再读偏好）：直接 DOM——点视图 tab（`role=tab`/`aria-selected` 定位，标签匹配 zh/en + 双 tab 兜底）+ 按编码行键 `tool%00call%00<callId>` 把目标行 `scrollIntoView` 并绿框闪烁；3 秒重试覆盖异步挂载，与冷路径幂等共存（已在轨迹视图则不重复点 tab）。折叠出渲染窗口的老行可能未挂载，此时切视图生效、逐轮气泡承接手动滚动；无痕模式静默降级为普通打开
+- **会话删除级联（v0.2.0 内修订）**：从"首事件 priming + 差集"改为**每个 `domain/changed` 事件无条件对回收站快照全量级联**（幂等：未知 id 是廉价 no-op，集合受回收站上限约束）——消除"重启后第一个删除错过即时级联"的缺口；已做活火验证（ghost 台账行 → 直发域事件 → 监听器即时清除 ✓，启动对账清孤儿亦活体复现 ✓）
+
+### 验证
+
+- 52 个单元测试全绿（store SQLite 10 例含损坏文件不抛/预算降级/级联删除/审计环形/legacy 导入；lifecycle 假 ctx 覆盖域事件级联（首事件即级联）/对账扫孤儿/压缩触发降级；turn-projection 4 例真实事件形状回放；tools 3 例赎回语义（实时/降级血缘+代理零跳/非法 hash）；`scripts/client-smoke.mjs` 打包挂载冒烟并入 `npm run check`）
+- 热重载回归 + 活体端点全 200；legacy JSON 50 条自动迁移实测 ✓
+- Node ≥ 22.5 要求已写入兼容性一节
+- **headroom 代理 0.37.0-code 契约回归通过**：桥请求形状兼容、#3286 混合输出无乱码、JSON 36%/日志 12% 实测压缩、活体桥在 0.37 下采纳计数增长且 failures 归零；代理侧 `--no-ccr` 要求与 kompress 模型预热步骤已写入 README（中英文）
+
 ## v0.1.3 (2026-09-16)
 
 ### 修复（回归止损）

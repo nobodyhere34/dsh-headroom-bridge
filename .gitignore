@@ -4,3 +4,7 @@ node_modules/
 
 .idea/
 dist/
+
+# src 必须纯 TS（构建产物只进 lib/）
+src/**/*.js
+src/**/*.js.map

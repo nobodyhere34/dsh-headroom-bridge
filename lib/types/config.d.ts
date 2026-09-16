@@ -29,11 +29,17 @@ export interface ArmBConfig {
 export interface CcrConfig {
     /** Persist originals beside the session log for retrieval. */
     enabled: boolean;
-    /** Entry time-to-live in milliseconds. */
+    /** Fresh window: while inside it the model can still retrieve originals. */
     ttlMs: number;
-    /** Maximum entries before oldest-stored eviction. */
+    /** Hard ceiling on ledger row count (metadata rows included). */
     maxEntries: number;
-    /** Store file override; empty resolves to `<DSH_HOME>/storages/<pkg>-ccr.json`. */
+    /** Byte budget for live originals; overflow demotes oldest-last-seen. */
+    maxBytes: number;
+    /** Rolling audit rows kept (kept/failed attempts, no originals). */
+    auditKeep: number;
+    /** Retention pass interval in milliseconds. */
+    gcIntervalMs: number;
+    /** Store file override; empty resolves to `<DSH_HOME>/storages/<pkg>-ccr.db`. */
     path: string;
 }
 /** Resolved, immutable configuration consumed by arms and tools. */

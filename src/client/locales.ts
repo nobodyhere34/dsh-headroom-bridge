@@ -22,6 +22,8 @@ export type HeadroomCardLocaleKey =
   | 'statsLedgerEntries' | 'statsHealth' | 'healthUnknown'
   | 'statsUnreachable' | 'statsLoading' | 'statsFailed'
   | 'ledgerTitle' | 'ledgerEmpty'
+  | 'chipCount' | 'chipOriginal' | 'chipExpired' | 'chipUnavailable'
+  | 'ledgerActivity' | 'ledgerShowOriginal' | 'ledgerOriginalGone'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -75,6 +77,13 @@ export const en: Record<HeadroomCardLocaleKey, string> = {
   statsFailed: 'Status unavailable: {message}',
   ledgerTitle: 'Recent compressions',
   ledgerEmpty: 'No records yet.',
+  chipCount: 'Compressed {count} results this turn · {before} → {after} chars (-{pct}%)',
+  chipOriginal: 'Original ({count} chars) — the compressed form is the tool row above:',
+  chipExpired: 'Original demoted after leaving the context window (metadata retained).',
+  chipUnavailable: 'Original unavailable.',
+  ledgerActivity: 'Recent operations',
+  ledgerShowOriginal: 'Show original',
+  ledgerOriginalGone: 'Original expired',
 }
 
 /** Simplified Chinese copy. */
@@ -122,4 +131,11 @@ export const zh: Record<HeadroomCardLocaleKey, string> = {
   statsFailed: '状态不可用：{message}',
   ledgerTitle: '最近压缩',
   ledgerEmpty: '（暂无记录）',
+  chipCount: '本轮压缩 {count} 处 · {before} → {after} 字符 (-{pct}%)',
+  chipOriginal: '原始内容（{count} 字符）— 压缩后的形态即上方工具行所示：',
+  chipExpired: '原文已出窗降级（台账仅保留元数据）。',
+  chipUnavailable: '原文不可用。',
+  ledgerActivity: '近期操作',
+  ledgerShowOriginal: '查看原文',
+  ledgerOriginalGone: '原文已过期',
 }

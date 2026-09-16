@@ -101,6 +101,12 @@ function effectiveToolName(exec: ToolExecution): string {
   return exec.name ?? ''
 }
 
+/** Durable session lineage of one execution ('' when no agent owns it). */
+function sessionOf(exec: ToolExecution): string {
+  const agent = exec.agent as { session?: { id?: string }; id?: string | number } | undefined
+  return String(agent?.session?.id ?? agent?.id ?? '')
+}
+
 /**
  * One compression attempt against a gate-passing candidate.
  * @returns the adopted replacement descriptor, or a short keep-reason string.
@@ -126,9 +132,15 @@ async function attemptCompress(
       timeoutMs: cfg.timeoutMs,
     }),
   )
-  if (raw === undefined) return 'inflight-cap'
+  if (raw === undefined) {
+    store.audit({ toolName, callId, sessionId, state: 'inflight-cap', reason: 'all slots busy', charsBefore: codePointLength(text), charsAfter: 0, strategy: '' })
+    return 'inflight-cap'
+  }
   const compressed = compressedContentOf(raw)
-  if (compressed === undefined) return 'empty-response'
+  if (compressed === undefined) {
+    store.audit({ toolName, callId, sessionId, state: 'empty-response', reason: 'proxy returned no content', charsBefore: codePointLength(text), charsAfter: 0, strategy: '' })
+    return 'empty-response'
+  }
 
   const originalChars = codePointLength(text)
   const compressedChars = codePointLength(compressed)
@@ -147,6 +159,11 @@ async function attemptCompress(
   if (!profitable || cfg.mode === 'audit') {
     ctx.logger.info(LOG_TAG + ': [audit] ' + toolName + ' ' + statsLine +
       ' mode=' + cfg.mode + ' profitable=' + (profitable ? 'yes' : 'no'))
+    store.audit({
+      toolName, callId, sessionId, state: 'not-adopted',
+      reason: !profitable ? 'below-min-savings' : 'mode-audit',
+      charsBefore: originalChars, charsAfter: compressedChars, strategy: chain,
+    })
     return 'not-adopted'
   }
 
@@ -160,6 +177,8 @@ async function attemptCompress(
     strategy: chain,
     charsBefore: originalChars,
     charsAfter: compressedChars,
+    tokensBefore: raw.tokens_before,
+    tokensAfter: raw.tokens_after,
     originalText: text,
   })
   assertRetrievable(store.get(hash) !== undefined, hash)
@@ -211,7 +230,12 @@ export function installArmA(
         args: exec.arguments,
       })
       if (skip !== null) {
-        if (OWN_TOOL_NAMES.has(toolName) || skip === 'already-compressed') {
+        if (skip === 'protected-path' || skip === 'error-output' || skip === 'already-compressed') {
+          store.audit({
+            toolName, callId: String(exec.callId), sessionId: sessionOf(exec), state: 'skipped',
+            reason: skip, charsBefore: text === undefined ? 0 : codePointLength(text), charsAfter: 0, strategy: '',
+          })
+        } else if (OWN_TOOL_NAMES.has(toolName)) {
           ctx.logger.debug(LOG_TAG + ': skip(' + skip + ') ' + toolName)
         }
         return decision
@@ -223,7 +247,7 @@ export function installArmA(
       const model = exec.agent?.options.model ?? 'deepseek-chat'
       const outcome = await attemptCompress(
         ctx, cfg, state, store, getClient(), counters,
-        toolName, exec.callId, String(exec.agent?.id ?? ''), model, text,
+        toolName, exec.callId, sessionOf(exec), model, text,
       )
       if (typeof outcome === 'string') {
         if (outcome === 'inflight-cap') counters.failures++

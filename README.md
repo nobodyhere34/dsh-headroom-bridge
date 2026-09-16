@@ -12,17 +12,22 @@
 | 次钩子 B（`agent/pre-step`） | 每步开始前，回收 A 当时漏掉的旧长结果（代理宕机/并发跳过/模式切换）。走 dsh 自带的「替换旧内容」机制：先记 prune 计量事件、再替换节点表面，原文保留在日志里，回放/分叉可还原两种视图 |
 | `headroom_retrieve {hash}` | 按 hash 赎回原文：先查本地台账，查不到问代理 |
 | `headroom_stats {}` | 看本插件的压缩计数与台账规模 |
-| 设置卡片 | 设置 → 插件 →「Headroom 压缩」：实时状态、最近压缩列表、7 个字段可编辑 |
-| 本地台账 | `<DSH_HOME>/storages/dsh-headroom-bridge-ccr.json`，原文按内容寻址（sha256 前 24 位）存储；默认 TTL 24h、上限 2000 条 |
+| 设置卡片 | 设置 → 插件 →「Headroom 压缩」：实时状态、近期操作（台账+尝试审计合并流，可展开原文对比、跳转来源会话）、7 个字段可编辑 |
+| 轨迹 chip | 有压缩的那轮对话末尾出现 headroom chip：本轮压缩 N 处、before→after 字节数、逐条展开看原文与压缩类型（压缩后形态就是上方工具行） |
+| 本地台账 | `<DSH_HOME>/storages/dsh-headroom-bridge-ccr.db`（SQLite，零外部依赖），原文按内容寻址（sha256 前 24 位）存储，带 session/callId 血缘与压缩类型；默认新鲜窗 24h、原文预算 64 MiB，超限先降级为元数据（血缘不丢） |
 
 `audit` vs `live`：audit 会真实调用代理测压缩效果，但不改任何内容（用来确认值不值得开）；live 才真正替换。
 
 ## 前提
 
-本地跑一个 headroom 压缩代理（默认 `http://127.0.0.1:8787`，用官方镜像 0.36.5-code 验证过）：
+本地跑一个 headroom 压缩代理（默认 `http://127.0.0.1:8787`，官方镜像 0.36.5-code / 0.37.0-code 验证过）：
 
 ```bash
-docker run -d --name headroom --network host ghcr.io/headroomlabs-ai/headroom:0.36.5-code
+# 0.37 推荐形态：--no-ccr 关闭代理侧 CCR（桥自带台账），HF_HOME 挂卷预热 kompress 模型
+docker run -d --name headroom --network host -e HF_HOME=/root/.headroom/hf-cache \
+  -v ~/.dsh/headroom-proxy/headroom-dotdir:/root/.headroom \
+  ghcr.io/headroomlabs-ai/headroom:0.37.0-code \
+  --host 0.0.0.0 --port 8787 --no-ccr
 ```
 
 桥只用三个端点：`POST /v1/compress`（单条工具消息，`mode: 'ccr'`）、`POST /v1/retrieve`、`GET /health`。任何兼容该契约的实现都行（`baseUrl` 指向它即可）；压缩器、内容路由策略在代理端配。代理只服务 loopback，所以容器要 host 网络或等价回环路由。
@@ -31,7 +36,7 @@ docker run -d --name headroom --network host ghcr.io/headroomlabs-ai/headroom:0.
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # 本地目录
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.1.3'  # GitHub tag
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.2.0'  # GitHub tag
 pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.3.tgz # tarball
 ```
 
@@ -45,7 +50,7 @@ pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.3.tgz # tarb
 2. 装插件，重启 dsh web
 3. 打开 设置 → 插件 → Headroom 压缩：确认「Proxy 健康」✓、跑几个长工具结果看计数变化
 4. 模式切 `live`，保存——新结果开始压缩；旧的超长结果由钩子 B 逐步回收
-5. 需要原文时：让模型拿标记里的 hash 调 `headroom_retrieve`，或在卡片「最近压缩」里对账
+5. 需要原文时：让模型拿标记里的 hash 调 `headroom_retrieve`，或在卡片「近期操作」/轨迹 chip 里展开对比
 
 live 采纳后模型看到的是压缩文本 + 一行标记：
 
@@ -93,8 +98,9 @@ live 采纳后模型看到的是压缩文本 + 一行标记：
 
 ## 存储与清理
 
-- 台账文件：`<DSH_HOME>/storages/dsh-headroom-bridge-ccr.json`（`DSH_HOME` 缺省 `~/.dsh`），跨会话全局共享、按内容去重
-- 容量：`ccr.maxEntries`（默认 2000）/ `ccr.ttlMs`（默认 24h），最旧先驱逐；驱逐后对应标记就赎不回了（除非代理侧还在）
+- 台账：`<DSH_HOME>/storages/dsh-headroom-bridge-ccr.db`（`DSH_HOME` 缺省 `~/.dsh`），SQLite（WAL），跨会话全局共享、按内容去重。旧的 `.json` 首次启动自动导入并改名 `.imported`
+- 有界保留：`ccr.maxBytes`（默认 64 MiB）/ `ccr.maxEntries`（默认 2000）/ `ccr.ttlMs`（默认 24h 新鲜窗）。超预算或过期时**原文降级为元数据**（`degraded`）——条目的血缘/压缩类型/前后字符数保留，只是全文取不回；按最久未访问优先降级
+- 生命周期联动：压缩出窗（compaction）触发即时回收；`ccr.gcIntervalMs` 定期回收；**会话删除级联**（与 dsh-session-manager 联动，会话进回收站即清掉其台账行）
 - 卸载**不会**删台账。彻底清理手动删文件（先确认没有还要赎回的标记）
 
 ## 同类插件
@@ -118,13 +124,14 @@ live 采纳后模型看到的是压缩文本 + 一行标记：
 - 读取类工具和源码/配置路径的结果默认不压（字节敏感场景不压）
 - KV 缓存：`live` 替换会从第一个被改 token 起失效缓存（任何工具结果重写的共性代价）；`audit` 无影响
 - 代理请求会携带工具结果全文：`baseUrl` 指到远程 = 内容离开本机，责任自负
-- 还没有 CI；测试是 6 个单元套件（mock 代理/会话），端到端行为需要真实部署里验证
+- 还没有 CI；测试是 9 个单元套件 52 例（mock 代理/会话/临时 SQLite 台账/假 ctx 生命周期/真实事件流投影回放）+ `pnpm run smoke` 打包产物挂载冒烟；级联/对账/端点另有活体验证（docs 见 CHANGELOG）
 
 ## 兼容性
 
-- DSH：当前代码在主线 **dsh-v0.1.5-rc.2** 上适配并验证（typecheck + 38 个单元测试全绿）。适配用了 rc.2 才有的接口形态（`SessionSeq`/`snapshotEvents()`/`eventAt()`、`surfaceOp: {op:'replace', startSeq, endSeq}`、`ctx.settings.installSection`、`@deepseek-ai/cordis` 包名），**不再兼容 0.1.2-rc.1 及更早**——旧版上这些调用点会直接报错
-- headroom 代理：官方 `0.36.5-code` **验证过**。0.37.0 把 `/v1/compress` 改成了会话感知（sidecar）、并修复子代理输出乱码（#3286）；升级兼容性**未评估**
-- 本仓库当前 0.1.3（GitHub tag `v0.1.3`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
+- **Node**：台账用 `node:sqlite`（Node **≥ 22.5** 内置，零外部依赖；22.x 会有 ExperimentalWarning，无碍）。更低版本上插件装载即失败（模块不存在），别装
+- DSH：当前代码在主线 **dsh-v0.1.5-rc.2** 上适配并验证（typecheck + 52 个单元测试全绿）。适配用了 rc.2 才有的接口形态（`SessionSeq`/`snapshotEvents()`/`eventAt()`、`surfaceOp: {op:'replace', startSeq, endSeq}`、`ctx.settings.installSection`、`@deepseek-ai/cordis` 包名），**不再兼容 0.1.2-rc.1 及更早**——旧版上这些调用点会直接报错
+- headroom 代理：官方 `0.36.5-code` 与 `0.37.0-code` **均验证过**。0.37 有三点要注意：① `/v1/compress` 的桥请求形状（单条 tool 消息）兼容不变，#3286 混合子代理输出乱码已修复（实测中文/代码围栏/JSON 键全保留）；② 独立端点不再产生代理侧 CCR（`ccr_hashes` 恒空，代理侧赎回兜底失效——桥的本地台账本就是权威赎回路径，不受影响）；③ 路由器新增「可逆性强制」会把无法挂代理标记的有损压缩整条跳过——**必须带 `--no-ccr` 起代理**（桥自带台账与标记，代理无需管赎回）。另 0.37 的散文压缩改用 kompress 神经模型（需 HuggingFace 联网预热 `chopratejas/kompress-v2-base` 与 `answerdotai/ModernBERT-base`，不通则散文/日志类恒等透传）
+- 本仓库当前 0.2.0（GitHub tag `v0.2.0`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
 
 ## FAQ
 
@@ -132,7 +139,7 @@ live 采纳后模型看到的是压缩文本 + 一行标记：
 A：按「一个结果会不会被压」的 9 步逐条查；卡片「尝试/失败/已采纳」和 `headroom_stats` 能看出停在哪步。另外：`audit` 模式永远不产生标记；含图片等非文本块的结果永远不压；钩子 B 的长度门是 `armB.thresholdChars`（默认 16384），比 A 高得多。
 
 **Q：`headroom_retrieve` 返回 found:false？**
-A：台账里没有（被驱逐或过期）且代理里也没有（代理侧行被驱逐/代理没开/hash 不属于这个代理）。返回值带 `detail` 说明原因。hash 要 8–64 位 hex。
+A：返回值带 `detail` 说明原因，三种情形分开：**原文已出保留窗/超预算降级**（detail 会给出保留的血缘：工具名、前后字符数、压缩类型——行还在台账里，只是全文取不回）；**会话已删除级联清理**（整段血缘都没了）；**hash 从未入台账**（回落查代理：代理侧行被驱逐/代理没开/hash 不属于这个代理）。hash 要 8–64 位 hex。
 
 **Q：想彻底关？**
 A：卸载，或装载配置里 `enabled: false`（卡片里关也行，但要下次装载生效）。之前产生的标记在台账还有条目时仍可赎回。

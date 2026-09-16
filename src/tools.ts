@@ -72,6 +72,18 @@ export function retrieveTool(ctx: Context, getConfig: () => ResolvedConfig, stor
           source: 'local',
         }
       }
+      // A retained-but-demoted row is its own honest answer: the lineage is
+      // in the ledger, only the original left the retention scope. No proxy
+      // round-trip for a bridge hash (the proxy never minted it).
+      const probe = store.inspect(id)
+      if (probe !== undefined && probe.originalText === null) {
+        return {
+          id,
+          found: false,
+          detail: 'original demoted by ledger retention; lineage kept: ' + probe.row.toolName +
+            ' ' + probe.row.charsBefore + '->' + probe.row.charsAfter + ' chars, ' + probe.row.strategy,
+        }
+      }
       try {
         const res = await getClient().retrieveHash(id)
         const content = typeof res.original_content === 'string' ? res.original_content : undefined

@@ -34,15 +34,50 @@ interface StatsPayload {
   error?: string
 }
 
-/** One recent ledger entry as served by /ledger/recent. */
-interface LedgerEntry {
-  hash: string
+/** One merged activity row as served by /ledger/activity. */
+interface ActivityRow {
+  kind: 'ledger' | 'audit'
+  ts: number
   toolName: string
+  callId: string
+  sessionId: string
+  state: string
+  reason: string
   charsBefore: number
   charsAfter: number
+  strategy: string
+  hash: string
+  originalAvailable: boolean
+  seq: number | null
+}
+
+/** One expanded entry payload as served by /ledger/entry. */
+interface EntryPayload {
+  ok: boolean
+  error?: string
+  meta?: { strategy?: string; charsBefore?: number }
+  originalText?: string
 }
 
 const API = '/headroom-bridge/api'
+
+/** Expandable original-text body for one activity row. */
+function OriginalBody({ hash }: { hash: string }) {
+  const [payload, setPayload] = useState<EntryPayload | null | 'loading'>('loading')
+  useEffect(() => {
+    let alive = true
+    fetch(API + '/ledger/entry?hash=' + encodeURIComponent(hash))
+      .then(res => res.json())
+      .then((d: EntryPayload) => { if (alive) setPayload(d) })
+      .catch(() => { if (alive) setPayload({ ok: false }) })
+    return () => { alive = false }
+  }, [hash])
+  if (payload === 'loading') return <p className={css.statNote}>{/* spinner */}…</p>
+  if (payload === null || !payload.ok) {
+    return <p className={css.statNote}>{payload?.error === 'original expired' ? '（原文已出窗降级，仅保留元数据）' : '（原文不可用）'}</p>
+  }
+  return <pre className={css.pre}>{payload.originalText}</pre>
+}
 
 /** Live bridge stats + proxy health block. */
 function StatsSection({ t }: { t: (key: HeadroomCardLocaleKey, params?: Record<string, unknown>) => string }) {
@@ -96,34 +131,59 @@ function StatsSection({ t }: { t: (key: HeadroomCardLocaleKey, params?: Record<s
   )
 }
 
-/** Recent compression ledger block. */
-function LedgerSection({ t }: { t: (key: HeadroomCardLocaleKey) => string }) {
-  const [rows, setRows] = useState<LedgerEntry[] | null>(null)
+/** Recent operations: merged ledger + audit stream with expandable originals. */
+function LedgerSection({ t, openSession }: { t: (key: HeadroomCardLocaleKey) => string; openSession?: (id: string, callId?: string) => void }) {
+  const [rows, setRows] = useState<ActivityRow[] | null>(null)
+  const [openHash, setOpenHash] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
-    fetch(API + '/ledger/recent?limit=8')
+    fetch(API + '/ledger/activity?limit=20')
       .then(res => res.json())
-      .then((d: { ok: boolean; entries?: LedgerEntry[] }) => {
-        if (alive && d.ok && Array.isArray(d.entries)) setRows(d.entries)
+      .then((d: { ok: boolean; rows?: ActivityRow[] }) => {
+        if (alive && d.ok && Array.isArray(d.rows)) setRows(d.rows)
       })
       .catch(() => {})
     return () => { alive = false }
   }, [])
   return (
-    <section className={`${css.block} ${css.ledger}`} aria-label={t('ledgerTitle')}>
-      <h4 className={css.blockTitle}>{t('ledgerTitle')}</h4>
+    <section className={`${css.block} ${css.ledger}`} aria-label={t('ledgerActivity')}>
+      <h4 className={css.blockTitle}>{t('ledgerActivity')}</h4>
       {rows === null ? null
         : rows.length === 0 ? <p className={css.statNote}>{t('ledgerEmpty')}</p>
           : (
             <div>
-              {rows.map((entry) => {
-                const saved = entry.charsBefore - entry.charsAfter
-                const pct = entry.charsBefore > 0 ? Math.round(saved / entry.charsBefore * 100) : 0
+              {rows.map((row, i) => {
+                const saved = row.charsBefore - row.charsAfter
+                const pct = row.charsBefore > 0 ? Math.round(saved / row.charsBefore * 100) : 0
+                const key = row.hash !== '' ? row.hash : row.kind + String(row.ts) + String(i)
+                const clickable = row.kind === 'ledger' && row.originalAvailable
                 return (
-                  <div key={entry.hash} className={css.ledgerRow}>
-                    <span className={css.ledgerHash}>{entry.hash.slice(0, 10)}</span>
-                    <span>{entry.toolName}</span>
-                    <span>{`${String(entry.charsBefore)}->${String(entry.charsAfter)} (-${String(pct)}%)`}</span>
+                  <div key={key} className={css.ledgerRow}>
+                    <button
+                      type="button"
+                      className={css.ledgerHead}
+                      disabled={!clickable}
+                      onClick={() => setOpenHash(openHash === key ? null : key)}
+                      aria-expanded={openHash === key}
+                    >
+                      <span className={css.ledgerHash}>{row.kind === 'ledger' ? row.hash.slice(0, 10) : row.state}</span>
+                      <span>{row.toolName}</span>
+                      {row.strategy !== '' && <span title={row.strategy}>{row.strategy.split('>').map(s => s.split(':')[0] ?? s).join('›')}</span>}
+                      {row.kind === 'ledger'
+                        ? <span>{`${String(row.charsBefore)}->${String(row.charsAfter)} (-${String(pct)}%)`}</span>
+                        : <span title={row.reason}>{row.state === 'not-adopted' ? `-${String(pct)}% ${row.reason}` : row.state}</span>}
+                      {openSession !== undefined && row.sessionId !== '' && (
+                        <span
+                          role="link"
+                          tabIndex={0}
+                          className={css.sessionLink}
+                          title={row.sessionId}
+                          onClick={(e) => { e.stopPropagation(); openSession(row.sessionId, row.callId) }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); openSession(row.sessionId, row.callId) } }}
+                        >↗</span>
+                      )}
+                    </button>
+                    {openHash === key && <OriginalBody hash={row.hash} />}
                   </div>
                 )
               })}
@@ -241,7 +301,7 @@ export function HeadroomCard(props: HeadroomCardProps) {
         onEdit={(on) => { props.edit('protectErrorOutputs', on ? 'true' : 'false') }}
         onReset={() => { props.resetField('protectErrorOutputs') }}
       />
-      <LedgerSection t={t} />
+      <LedgerSection t={t} openSession={props.openSession} />
     </PluginCard>
   )
 }

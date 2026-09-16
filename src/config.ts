@@ -32,11 +32,17 @@ export interface ArmBConfig {
 export interface CcrConfig {
   /** Persist originals beside the session log for retrieval. */
   enabled: boolean
-  /** Entry time-to-live in milliseconds. */
+  /** Fresh window: while inside it the model can still retrieve originals. */
   ttlMs: number
-  /** Maximum entries before oldest-stored eviction. */
+  /** Hard ceiling on ledger row count (metadata rows included). */
   maxEntries: number
-  /** Store file override; empty resolves to `<DSH_HOME>/storages/<pkg>-ccr.json`. */
+  /** Byte budget for live originals; overflow demotes oldest-last-seen. */
+  maxBytes: number
+  /** Rolling audit rows kept (kept/failed attempts, no originals). */
+  auditKeep: number
+  /** Retention pass interval in milliseconds. */
+  gcIntervalMs: number
+  /** Store file override; empty resolves to `<DSH_HOME>/storages/<pkg>-ccr.db`. */
   path: string
 }
 
@@ -100,6 +106,9 @@ const DEFAULT_PROTECT_PATH_GLOBS = [
 
 const DEFAULT_CCR_TTL_MS = 24 * 60 * 60 * 1000
 const DEFAULT_CCR_MAX_ENTRIES = 2000
+const DEFAULT_CCR_MAX_BYTES = 64 * 1024 * 1024
+const DEFAULT_CCR_AUDIT_KEEP = 2000
+const DEFAULT_CCR_GC_INTERVAL_MS = 60 * 1000
 
 /** Raw configuration shape accepted from composition layers. */
 export interface Config {
@@ -217,6 +226,9 @@ export function resolveConfig(raw: Config | undefined): ResolvedConfig {
       enabled: bool(ccrRaw.enabled, true, 'ccr.enabled'),
       ttlMs: positiveInt(ccrRaw.ttlMs, DEFAULT_CCR_TTL_MS, 'ccr.ttlMs'),
       maxEntries: positiveInt(ccrRaw.maxEntries, DEFAULT_CCR_MAX_ENTRIES, 'ccr.maxEntries'),
+      maxBytes: positiveInt(ccrRaw.maxBytes, DEFAULT_CCR_MAX_BYTES, 'ccr.maxBytes'),
+      auditKeep: positiveInt(ccrRaw.auditKeep, DEFAULT_CCR_AUDIT_KEEP, 'ccr.auditKeep'),
+      gcIntervalMs: positiveInt(ccrRaw.gcIntervalMs, DEFAULT_CCR_GC_INTERVAL_MS, 'ccr.gcIntervalMs'),
       path: typeof ccrRaw.path === 'string' ? ccrRaw.path : '',
     }),
   })
@@ -249,6 +261,9 @@ export const SettingsSchema: z<Config> = z.object({
     enabled: z.boolean(),
     ttlMs: z.number(),
     maxEntries: z.number(),
+    maxBytes: z.number(),
+    auditKeep: z.number(),
+    gcIntervalMs: z.number(),
     path: z.string(),
   }),
 })

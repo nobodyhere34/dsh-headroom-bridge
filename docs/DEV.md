@@ -36,6 +36,7 @@ cordis.patch.yml  插件入口（id/name/config = 设置 base 层）
 DSH_CHECKOUT=/path/to/deepseek-harness bash scripts/build.sh   # src → lib（host 半，tsc）
 pnpm run build:client                                           # src/client → lib/client.js
 pnpm run typecheck
+pnpm run smoke                                                  # 打包产物挂载冒烟：假 loader/ctx 驱动 apply，验注册形状
 pnpm run check                                                  # 上面全部
 ```
 

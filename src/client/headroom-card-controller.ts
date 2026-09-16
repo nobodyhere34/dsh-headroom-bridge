@@ -57,6 +57,12 @@ export interface HeadroomCardFace extends CardActions {
     /** Card snapshot bound by the renderer as useHeadroomCard. */
     headroomCard: SnapshotStore<HeadroomCardState>
   }
+  /**
+   * Navigate the workspace UI to one session (activity-row deep link);
+   * undefined when the deployment exposes no workspace navigation.
+   * @param sessionId - session to open.
+   */
+  openSession?: (sessionId: string, callId?: string) => void
 }
 
 /** Bridges the 'headroom' scope onto the card's staged form. */
@@ -64,8 +70,14 @@ export class HeadroomCardController {
   private readonly form: CardForm<HeadroomSettings>
   private readonly store: SnapshotStore<HeadroomCardState>
 
-  /** @param scope - the bound settings scope for the 'headroom' namespace. */
-  constructor(scope: SettingsScope<HeadroomSettings>) {
+  /**
+   * @param scope - the bound settings scope for the 'headroom' namespace.
+   * @param openSession - workspace navigation to a session (optionally focused on a tool call), for activity-row deep links.
+   */
+  constructor(
+    scope: SettingsScope<HeadroomSettings>,
+    private readonly openSession?: (sessionId: string, callId?: string) => void,
+  ) {
     this.form = new CardForm(scope, [
       selectField('mode', ['audit', 'live']),
       boolField('enabled'),
@@ -96,6 +108,10 @@ export class HeadroomCardController {
    * @returns the card's snapshot and its form actions.
    */
   inject(): HeadroomCardFace {
-    return { hooks: { headroomCard: this.store }, ...this.form.actions() }
+    return {
+      hooks: { headroomCard: this.store },
+      ...(this.openSession === undefined ? {} : { openSession: this.openSession }),
+      ...this.form.actions(),
+    }
   }
 }

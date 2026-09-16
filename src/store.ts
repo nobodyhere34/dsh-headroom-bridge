@@ -1,17 +1,26 @@
 /**
- * Local CCR store: the bridge-side original-text ledger.
+ * Local CCR store: the bridge-side original-text ledger on SQLite.
  *
- * Content-addressed (SHA-256 of the exact original, truncated) so repeated
- * identifications share one entry and hashes stay stable across sessions.
- * Persistence is best-effort durability beside the session log - deliberately
- * not a replacement for it (out-of-tree events cannot join the log vocabulary;
- * see RESEARCH-REPORT.md section 11.4 revision decision 1a).
+ * Bounded-losslessness policy ("有限的轨迹无损"): every compression is
+ * recorded (adopted rows keep the exact original; kept/failed attempts are
+ * audited), but originals are retained under a byte budget instead of forever.
+ * Retention tiers, newest-first protected:
+ *   1. inside the fresh window (model can still retrieve - retrieval only
+ *      happens while the content sits in the context window),
+ *   2. budget headroom (`maxBytes`) - the oldest-retrieved originals degrade
+ *      (metadata + accounting stay, the blob is dropped) whenever the live
+ *      byte total moves past budget, and once an entry leaves the fresh
+ *      window it is demoted unconditionally.
+ * `deleteSession` cascades every row of a deleted session (the durable
+ * session log itself outlives our ledger by design; see RESEARCH-REPORT.md
+ * section 11.4 revision decision 1a).
  * @module
  */
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
-import { dirname, isAbsolute, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { LOG_TAG } from './config.js'
 
 /** One stored original plus its compression accounting. */
@@ -20,12 +29,48 @@ export interface CcrEntry {
   readonly toolName: string
   readonly callId: string
   readonly sessionId: string
+  /** transforms_applied chain from the proxy = the compression type record. */
   readonly strategy: string
   readonly charsBefore: number
   readonly charsAfter: number
+  readonly tokensBefore?: number
+  readonly tokensAfter?: number
   readonly originalText: string
   readonly storedAt: number
   readonly expiresAt: number
+  /** Durable log seq when known at put time (arm B reclaims existing nodes). */
+  readonly seq?: number
+}
+
+/** One kept/failed attempt audit row (no original text). */
+export interface CcrAuditEntry {
+  readonly toolName: string
+  readonly callId: string
+  readonly sessionId: string
+  /** skipped | not-adopted | empty-response | inflight-cap | failed */
+  readonly state: string
+  readonly reason: string
+  readonly charsBefore: number
+  readonly charsAfter: number
+  readonly strategy: string
+}
+
+/** UI-facing activity row (ledger row or audit row, newest first). */
+export interface CcrActivityRow {
+  readonly kind: 'ledger' | 'audit'
+  readonly ts: number
+  readonly toolName: string
+  readonly callId: string
+  readonly sessionId: string
+  readonly state: string
+  readonly reason: string
+  readonly charsBefore: number
+  readonly charsAfter: number
+  readonly strategy: string
+  readonly hash: string
+  readonly originalAvailable: boolean
+  /** Durable log seq once backfilled (ledger rows only). */
+  readonly seq: number | null
 }
 
 /** Store statistics snapshot. */
@@ -34,79 +79,162 @@ export interface CcrStats {
   hits: number
   misses: number
   writes: number
+  /** originals demoted to metadata-only (out of window or over budget) */
+  demoted: number
+  /** live (non-degraded) original bytes */
+  bytesLive: number
 }
-
-interface StoreFileShape {
-  version: number
-  entries: CcrEntry[]
-}
-
-const STORE_VERSION = 1
-const STORE_FILE_NAME = 'dsh-headroom-bridge-ccr.json'
 
 /** Minimal logger surface the store needs. */
 export interface StoreLogger {
   warn(msg: string): void
 }
 
-/** Whether a deserialized record still looks usable. */
-function isUsable(value: unknown, now: number): value is CcrEntry {
-  if (value === null || typeof value !== 'object') return false
-  const e = value as Record<string, unknown>
-  return typeof e.hash === 'string' && e.hash.length > 0 &&
-    typeof e.originalText === 'string' &&
-    typeof e.toolName === 'string' &&
-    typeof e.callId === 'string' &&
-    typeof e.storedAt === 'number' && Number.isFinite(e.storedAt) &&
-    typeof e.expiresAt === 'number' && Number.isFinite(e.expiresAt) &&
-    e.expiresAt > now
-}
+const LEGACY_FILE_NAME = 'dsh-headroom-bridge-ccr.json'
 
-/** Resolve the on-disk store path. */
+/** Resolve the on-disk SQLite path (legacy JSON import source is its sibling). */
 export function defaultStorePath(explicitPath: string): string {
-  if (explicitPath.length > 0 && isAbsolute(explicitPath)) return explicitPath
-  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
-  return join(home, 'storages', STORE_FILE_NAME)
+  if (explicitPath.length > 0 && explicitPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(explicitPath)) return explicitPath
+  const home = process.env.DSH_HOME ?? join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.dsh')
+  return join(home, 'storages', 'dsh-headroom-bridge-ccr.db')
 }
 
-/** Content-addressed original-text store with debounced atomic persistence. */
+/** Legacy v0 JSON ledger location beside the SQLite file. */
+function legacyPath(dbPath: string): string {
+  return join(dirname(dbPath), LEGACY_FILE_NAME)
+}
+
+interface RowLike {
+  hash: string
+  tool_name: string
+  call_id: string
+  session_id: string
+  strategy: string
+  chars_before: number
+  chars_after: number
+  tokens_before: number | null
+  tokens_after: number | null
+  original_text: string | null
+  stored_at: number
+  fresh_until: number
+  last_seen_at: number
+  degraded: number
+  seq: number | null
+}
+
+/** Content-addressed original-text ledger with tiered bounded retention. */
 export class CcrStore {
-  private readonly map = new Map<string, CcrEntry>()
-  private saveTimer: ReturnType<typeof setTimeout> | undefined
-  private dirty = false
+  private db: DatabaseSync | undefined
   private disposed = false
   private hitsCount = 0
   private missesCount = 0
   private writesCount = 0
+  private demotedCount = 0
 
   constructor(private readonly options: {
     enabled: boolean
+    /** fresh window: while inside it the model may still retrieve the original */
     ttlMs: number
+    /** legacy row cap (kept for API compatibility; hard ceiling on ledger rows) */
     maxEntries: number
+    /** byte budget for live originals; overflow demotes oldest-last-seen first */
+    maxBytes: number
+    /** audit rows kept (rolling) */
+    auditKeep: number
     path: string
     logger: StoreLogger
   }) {}
 
-  /** Load persisted entries; corrupt files start empty rather than failing. */
+  /** Open the database; corrupt/unreadable files start empty rather than failing. */
   init(): void {
-    const now = Date.now()
-    let parsed: unknown
+    if (!this.options.enabled || this.disposed) return
+    const target = defaultStorePath(this.options.path)
     try {
-      parsed = JSON.parse(readFileSync(this.filePath(), 'utf8'))
-    } catch {
-      return // first run, missing file, or unreadable - start empty
-    }
-    if (parsed === null || typeof parsed !== 'object') return
-    const shape = parsed as Record<string, unknown>
-    if (shape.version !== STORE_VERSION || !Array.isArray(shape.entries)) return
-    for (const raw of shape.entries.slice(-this.options.maxEntries)) {
-      if (!isUsable(raw, now)) continue
-      this.map.set(raw.hash, raw)
+      mkdirSync(dirname(target), { recursive: true })
+      this.db = new DatabaseSync(target)
+      this.db.exec('PRAGMA journal_mode = WAL')
+      this.db.exec('PRAGMA synchronous = NORMAL')
+      this.db.exec(`CREATE TABLE IF NOT EXISTS ccr (
+        hash TEXT PRIMARY KEY,
+        tool_name TEXT NOT NULL DEFAULT '',
+        call_id TEXT NOT NULL DEFAULT '',
+        session_id TEXT NOT NULL DEFAULT '',
+        strategy TEXT NOT NULL DEFAULT '',
+        chars_before INTEGER NOT NULL DEFAULT 0,
+        chars_after INTEGER NOT NULL DEFAULT 0,
+        tokens_before INTEGER,
+        tokens_after INTEGER,
+        original_text TEXT,
+        stored_at INTEGER NOT NULL,
+        fresh_until INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        degraded INTEGER NOT NULL DEFAULT 0,
+        seq INTEGER
+      )`)
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_ccr_session ON ccr(session_id)')
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_ccr_fresh ON ccr(degraded, fresh_until)')
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_ccr_seen ON ccr(last_seen_at)')
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_ccr_call ON ccr(session_id, call_id)')
+      // v1 databases predate the seq column; add it when missing.
+      try { this.db.exec('ALTER TABLE ccr ADD COLUMN seq INTEGER') } catch { /* already present */ }
+      this.db.exec(`CREATE TABLE IF NOT EXISTS audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        tool_name TEXT NOT NULL DEFAULT '',
+        call_id TEXT NOT NULL DEFAULT '',
+        session_id TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        chars_before INTEGER NOT NULL DEFAULT 0,
+        chars_after INTEGER NOT NULL DEFAULT 0,
+        strategy TEXT NOT NULL DEFAULT ''
+      )`)
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_audit_session ON audit(session_id)')
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts)')
+      this.importLegacy(target)
+    } catch (error: unknown) {
+      this.options.logger.warn(LOG_TAG + ': ccr sqlite open failed, store disabled: ' + String(error))
+      this.db = undefined
     }
   }
 
-  private filePath(): string {
-    return defaultStorePath(this.options.path)
+  /** Import the v0.x JSON ledger once, then park the file aside. */
+  private importLegacy(target: string): void {
+    const db = this.db
+    if (db === undefined) return
+    const old = legacyPath(target)
+    if (!existsSync(old)) return
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(readFileSync(old, 'utf8'))
+    } catch {
+      try { renameSync(old, old + '.imported') } catch { /* best effort */ }
+      return
+    }
+    const shape = parsed as Record<string, unknown>
+    const now = Date.now()
+    const entries = shape.version === 1 && Array.isArray(shape.entries) ? shape.entries : []
+    const insert = db.prepare(`INSERT OR IGNORE INTO ccr
+      (hash, tool_name, call_id, session_id, strategy, chars_before, chars_after,
+       tokens_before, tokens_after, original_text, stored_at, fresh_until, last_seen_at, degraded)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0)`)
+    let imported = 0
+    for (const raw of entries as Array<Record<string, unknown>>) {
+      if (raw === null || typeof raw !== 'object') continue
+      if (typeof raw.hash !== 'string' || typeof raw.originalText !== 'string') continue
+      const storedAt = typeof raw.storedAt === 'number' ? raw.storedAt : now
+      if (typeof raw.expiresAt === 'number' && raw.expiresAt <= now) continue // already stale
+      try {
+        insert.run(String(raw.hash), String(raw.toolName ?? ''), String(raw.callId ?? ''),
+          String(raw.sessionId ?? ''), String(raw.strategy ?? ''),
+          Number(raw.charsBefore ?? 0), Number(raw.charsAfter ?? 0),
+          null, null, String(raw.originalText),
+          storedAt, typeof raw.expiresAt === 'number' ? raw.expiresAt : now + this.options.ttlMs, now)
+        imported++
+      } catch { /* one bad row must not abort the import */ }
+    }
+    try { renameSync(old, old + '.imported') } catch { /* best effort */ }
+    if (imported > 0) this.options.logger.warn(LOG_TAG + ': ccr imported ' + imported + ' legacy entries')
   }
 
   /**
@@ -115,95 +243,247 @@ export class CcrStore {
    */
   put(entry: Omit<CcrEntry, 'storedAt' | 'expiresAt'>): string {
     if (!this.options.enabled || this.disposed) return entry.hash
-    this.map.delete(entry.hash) // refresh recency position deterministically
-    this.map.set(entry.hash, { ...entry, storedAt: Date.now(), expiresAt: Date.now() + this.options.ttlMs })
-    this.evictOverflow()
-    this.writesCount++
-    this.scheduleSave()
+    const db = this.db
+    if (db === undefined) return entry.hash
+    const now = Date.now()
+    try {
+      db.prepare(`INSERT INTO ccr
+        (hash, tool_name, call_id, session_id, strategy, chars_before, chars_after,
+         tokens_before, tokens_after, original_text, stored_at, fresh_until, last_seen_at, degraded, seq)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)
+        ON CONFLICT(hash) DO UPDATE SET
+          original_text = excluded.original_text,
+          fresh_until = excluded.fresh_until,
+          last_seen_at = excluded.last_seen_at,
+          degraded = 0,
+          seq = COALESCE(ccr.seq, excluded.seq)`)
+        .run(entry.hash, entry.toolName, entry.callId, entry.sessionId, entry.strategy,
+          entry.charsBefore, entry.charsAfter,
+          entry.tokensBefore ?? null, entry.tokensAfter ?? null, entry.originalText,
+          now, now + this.options.ttlMs, now, entry.seq ?? null)
+      this.writesCount++
+      this.enforceBudget()
+    } catch (error: unknown) {
+      this.options.logger.warn(LOG_TAG + ': ccr put failed (keeping original anyway): ' + String(error))
+    }
     return entry.hash
   }
 
-  private evictOverflow(): void {
-    while (this.map.size > this.options.maxEntries) {
-      let oldestKey: string | undefined
-      let oldestAt = Infinity
-      for (const [key, entry] of this.map) {
-        if (entry.storedAt < oldestAt) { oldestAt = entry.storedAt; oldestKey = key }
-      }
-      if (oldestKey === undefined) break
-      this.map.delete(oldestKey)
+  /** Record one kept/failed attempt (never stores the original). */
+  audit(e: CcrAuditEntry): void {
+    if (!this.options.enabled || this.disposed) return
+    const db = this.db
+    if (db === undefined) return
+    try {
+      db.prepare('INSERT INTO audit (ts, tool_name, call_id, session_id, state, reason, chars_before, chars_after, strategy) VALUES (?,?,?,?,?,?,?,?,?)')
+        .run(Date.now(), e.toolName, e.callId, e.sessionId, e.state, e.reason, e.charsBefore, e.charsAfter, e.strategy)
+      db.prepare('DELETE FROM audit WHERE id NOT IN (SELECT id FROM audit ORDER BY ts DESC, id DESC LIMIT ?)')
+        .run(this.options.auditKeep)
+    } catch (error: unknown) {
+      this.options.logger.warn(LOG_TAG + ': ccr audit write failed: ' + String(error))
     }
   }
 
-  /** Fetch one live entry by hash; expired entries disappear on read. */
+  /**
+   * Fetch one live original by hash. Entries outside their fresh window or
+   * demoted to metadata-only count as misses (retrieval demand only exists
+   * while the content is inside a context window).
+   */
   get(hash: string): CcrEntry | undefined {
-    const entry = this.map.get(hash)
-    if (entry === undefined) {
-      this.missesCount++
-      return undefined
-    }
-    if (Date.now() >= entry.expiresAt) {
-      this.map.delete(hash)
+    const db = this.db
+    if (db === undefined) { this.missesCount++; return undefined }
+    const row = db.prepare('SELECT * FROM ccr WHERE hash = ?').get(hash) as RowLike | undefined
+    if (row === undefined || row.degraded === 1 || row.original_text === null || row.fresh_until <= Date.now()) {
       this.missesCount++
       return undefined
     }
     this.hitsCount++
-    return entry
+    try { db.prepare('UPDATE ccr SET last_seen_at = ? WHERE hash = ?').run(Date.now(), hash) } catch { /* cosmetic */ }
+    return {
+      hash: row.hash, toolName: row.tool_name, callId: row.call_id, sessionId: row.session_id,
+      strategy: row.strategy, charsBefore: row.chars_before, charsAfter: row.chars_after,
+      tokensBefore: row.tokens_before ?? undefined, tokensAfter: row.tokens_after ?? undefined,
+      originalText: row.original_text, storedAt: row.stored_at, expiresAt: row.fresh_until,
+    }
+  }
+
+  /** Metadata + original-presence for one hash (UI detail face; no hit counting). */
+  inspect(hash: string): { row: CcrActivityRow; originalText: string | null } | undefined {
+    const db = this.db
+    if (db === undefined) return undefined
+    const row = db.prepare('SELECT * FROM ccr WHERE hash = ?').get(hash) as RowLike | undefined
+    if (row === undefined) return undefined
+    // Redeemability is judged exactly as get() judges it (degraded OR expired
+    // OR missing text), so the API/tool/UI faces never disagree about one row
+    // while a demoted-by-timing row still awaits its gc marking.
+    const redeemable = row.degraded === 0 && row.original_text !== null && row.fresh_until > Date.now()
+    return {
+      row: {
+        kind: 'ledger', ts: row.stored_at, toolName: row.tool_name, callId: row.call_id,
+        sessionId: row.session_id, state: 'adopted', reason: '',
+        charsBefore: row.chars_before, charsAfter: row.chars_after, strategy: row.strategy,
+        hash: row.hash, originalAvailable: redeemable,
+        seq: row.seq ?? null,
+      },
+      originalText: redeemable ? row.original_text : null,
+    }
   }
 
   /**
-   * Most recent live entries by storedAt, newest first (browsing face).
+   * Most recent live originals by storedAt, newest first (browsing face).
    * @param limit - maximum entries to return.
-   * @returns live entries in recency order.
    */
   recent(limit: number): CcrEntry[] {
-    const sorted = [...this.map.values()]
-      .filter((e) => Date.now() < e.expiresAt)
-      .sort((a, b) => b.storedAt - a.storedAt)
-    return sorted.slice(0, Math.max(0, limit))
+    const db = this.db
+    if (db === undefined) return []
+    const rows = db.prepare(
+      'SELECT * FROM ccr WHERE degraded = 0 AND fresh_until > ? ORDER BY stored_at DESC LIMIT ?',
+    ).all(Date.now(), Math.max(0, limit)) as unknown as RowLike[]
+    return rows.map((row) => ({
+      hash: row.hash, toolName: row.tool_name, callId: row.call_id, sessionId: row.session_id,
+      strategy: row.strategy, charsBefore: row.chars_before, charsAfter: row.chars_after,
+      tokensBefore: row.tokens_before ?? undefined, tokensAfter: row.tokens_after ?? undefined,
+      originalText: row.original_text ?? '', storedAt: row.stored_at, expiresAt: row.fresh_until,
+    }))
   }
 
-  /** Current counters and live entry count. */
-  stats(): CcrStats {
-    return { entries: this.map.size, hits: this.hitsCount, misses: this.missesCount, writes: this.writesCount }
+  /**
+   * Merged activity stream for the card / audit face: newest ledger + audit
+   * rows interleaved by time. Never returns original text.
+   * @param limit - maximum rows to return.
+   * @param session - when set, only rows of this session (pushed into the
+   * queries, so a busy global stream never crowds a session's own rows out).
+   */
+  activity(limit: number, session?: string): CcrActivityRow[] {
+    const db = this.db
+    if (db === undefined) return []
+    const cap = Math.max(0, limit)
+    const ledger = (session === undefined
+      ? db.prepare('SELECT * FROM ccr ORDER BY stored_at DESC LIMIT ?').all(cap)
+      : db.prepare('SELECT * FROM ccr WHERE session_id = ? ORDER BY stored_at DESC LIMIT ?').all(session, cap)
+    ) as unknown as RowLike[]
+    const ledgerRows = ledger
+      .map((row): CcrActivityRow => ({
+        kind: 'ledger', ts: row.stored_at, toolName: row.tool_name, callId: row.call_id,
+        sessionId: row.session_id, state: 'adopted', reason: '',
+        charsBefore: row.chars_before, charsAfter: row.chars_after, strategy: row.strategy,
+        hash: row.hash, originalAvailable: row.degraded === 0 && row.original_text !== null,
+        seq: row.seq ?? null,
+      }))
+    const audit = (session === undefined
+      ? db.prepare('SELECT * FROM audit ORDER BY ts DESC, id DESC LIMIT ?').all(cap)
+      : db.prepare('SELECT * FROM audit WHERE session_id = ? ORDER BY ts DESC, id DESC LIMIT ?').all(session, cap)
+    ) as Array<{
+      ts: number; tool_name: string; call_id: string; session_id: string; state: string
+      reason: string; chars_before: number; chars_after: number; strategy: string
+    }>
+    const auditRows = audit.map((a): CcrActivityRow => ({
+      kind: 'audit', ts: a.ts, toolName: a.tool_name, callId: a.call_id, sessionId: a.session_id,
+      state: a.state, reason: a.reason, charsBefore: a.chars_before, charsAfter: a.chars_after,
+      strategy: a.strategy, hash: '', originalAvailable: false, seq: null,
+    }))
+    return [...ledgerRows, ...auditRows].sort((a, b) => b.ts - a.ts).slice(0, cap)
   }
 
-  private scheduleSave(): void {
-    if (!this.dirty) {
-      this.dirty = true
-      this.saveTimer = setTimeout(() => { this.flush() }, 1_000)
-      this.saveTimer.unref?.()
-    }
-  }
-
-  /** Atomic write-through; failures degrade to an in-memory-only store. */
-  flush(): void {
-    this.dirty = false
-    if (this.disposed) return
+  /**
+   * Retention pass: demote fresh-window-expired originals, then enforce the
+   * byte budget by demoting oldest-last-seen first. Safe to call often.
+   */
+  gc(): void {
+    const db = this.db
+    if (db === undefined) return
+    const now = Date.now()
     try {
-      const target = this.filePath()
-      mkdirSync(dirname(target), { recursive: true })
-      const payload: StoreFileShape = { version: STORE_VERSION, entries: [...this.map.values()] }
-      const tmp = join(tmpdir(), STORE_FILE_NAME + '.' + process.pid + '.tmp')
-      writeFileSync(tmp, JSON.stringify(payload), 'utf8')
-      renameSync(tmp, target)
+      const expired = db.prepare(
+        'UPDATE ccr SET original_text = NULL, degraded = 1 WHERE degraded = 0 AND fresh_until <= ?',
+      ).run(now)
+      if (expired.changes > 0) this.demotedCount += Number(expired.changes)
+      this.enforceBudget()
     } catch (error: unknown) {
-      this.options.logger.warn(LOG_TAG + ': ccr persist failed, keeping memory-only: ' + String(error))
+      this.options.logger.warn(LOG_TAG + ': ccr gc failed: ' + String(error))
     }
   }
 
-  /** Stop persistence timers and flush immediately (plugin unload). */
+  private liveBytes(): number {
+    const db = this.db
+    if (db === undefined) return 0
+    const row = db.prepare('SELECT COALESCE(SUM(LENGTH(CAST(original_text AS BLOB))), 0) AS bytes FROM ccr WHERE degraded = 0').get() as { bytes: number }
+    return Number(row.bytes)
+  }
+
+  private enforceBudget(): void {
+    const db = this.db
+    if (db === undefined) return
+    let over = this.liveBytes() > this.options.maxBytes
+    let guard = 0
+    while (over && guard < 200) {
+      guard++
+      const victim = db.prepare(
+        'SELECT hash FROM ccr WHERE degraded = 0 ORDER BY last_seen_at ASC, stored_at ASC LIMIT 1',
+      ).get() as { hash: string } | undefined
+      if (victim === undefined) break
+      db.prepare('UPDATE ccr SET original_text = NULL, degraded = 1 WHERE hash = ?').run(victim.hash)
+      this.demotedCount++
+      over = this.liveBytes() > this.options.maxBytes
+    }
+    // legacy hard ceiling on ledger rows (count, not bytes)
+    const count = db.prepare('SELECT COUNT(*) AS n FROM ccr').get() as { n: number }
+    const ceiling = Math.max(this.options.maxEntries, 1000)
+    if (Number(count.n) > ceiling) {
+      db.prepare('DELETE FROM ccr WHERE hash NOT IN (SELECT hash FROM ccr ORDER BY stored_at DESC LIMIT ?)').run(ceiling)
+    }
+  }
+
+  /**
+   * Distinct non-empty session ids owning ledger rows (reconciliation face).
+   * @returns session ids present in the ledger.
+   */
+  sessionIds(): string[] {
+    const db = this.db
+    if (db === undefined) return []
+    const rows = db.prepare("SELECT DISTINCT session_id FROM ccr WHERE session_id <> ''")
+      .all() as unknown as Array<{ session_id: string }>
+    return rows.map((r) => r.session_id)
+  }
+
+  /**
+   * Cascade-remove every ledger and audit row of one deleted session.
+   * @returns the number of removed rows across both tables.
+   */
+  deleteSession(sessionId: string): number {
+    const db = this.db
+    if (db === undefined || sessionId.length === 0) return 0
+    try {
+      const a = db.prepare('DELETE FROM ccr WHERE session_id = ?').run(sessionId)
+      const b = db.prepare('DELETE FROM audit WHERE session_id = ?').run(sessionId)
+      return Number(a.changes) + Number(b.changes)
+    } catch (error: unknown) {
+      this.options.logger.warn(LOG_TAG + ': ccr deleteSession failed: ' + String(error))
+      return 0
+    }
+  }
+
+  /** Current counters, live byte total, and browsing state. */
+  stats(): CcrStats {
+    const db = this.db
+    let entries = 0
+    if (db !== undefined) {
+      const row = db.prepare('SELECT COUNT(*) AS n FROM ccr WHERE degraded = 0').get() as { n: number }
+      entries = Number(row.n)
+    }
+    return {
+      entries, hits: this.hitsCount, misses: this.missesCount, writes: this.writesCount,
+      demoted: this.demotedCount, bytesLive: this.liveBytes(),
+    }
+  }
+
+  /** Compatibility no-op (SQLite writes are immediate). */
+  flush(): void {}
+
+  /** Close the database (plugin unload). */
   dispose(): void {
     this.disposed = true
-    if (this.saveTimer !== undefined) clearTimeout(this.saveTimer)
-    if (!this.dirty) return
-    this.dirty = false
-    try {
-      const target = this.filePath()
-      mkdirSync(dirname(target), { recursive: true })
-      writeFileSync(target, JSON.stringify({ version: STORE_VERSION, entries: [...this.map.values()] }), 'utf8')
-    } catch (error: unknown) {
-      this.options.logger.warn(LOG_TAG + ': ccr dispose flush failed: ' + String(error))
-    }
+    try { this.db?.close() } catch { /* already closed */ }
+    this.db = undefined
   }
 }

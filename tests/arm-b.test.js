@@ -45,7 +45,7 @@ function setup(overrides = {}) {
     logger: quiet,
   }
   const dir = mkdtempSync(join(tmpdir(), 'hb-armb-'))
-  const store = new CcrStore({ enabled: true, ttlMs: 60000, maxEntries: 10, path: join(dir, 'ccr.json'), logger: quiet })
+  const store = new CcrStore({ enabled: true, ttlMs: 60000, maxEntries: 2000, maxBytes: 64 * 1024 * 1024, auditKeep: 100, path: join(dir, 'ccr.db'), logger: quiet })
   store.init()
   const counters = newCounters()
   const cfg = resolveConfig({ mode: 'live', armB: { thresholdChars: 100, minSavingsRatio: 0.1, maxPerStep: 2 } })

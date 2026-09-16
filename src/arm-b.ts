@@ -143,11 +143,21 @@ async function reclaimPass(
       if (!profitable) {
         ctx.logger.info(LOG_TAG + ': armB [audit] seq=' + candidate.seq + ' ' + candidate.toolName +
           ' chars ' + originalChars + '->' + compressedChars + ' (-' + pct + '%) profitable=no')
+        store.audit({
+          toolName: candidate.toolName, callId: message.source.callId,
+          sessionId: String(agent.session?.id ?? agent.id ?? ''), state: 'not-adopted',
+          reason: 'armB-below-min-savings', charsBefore: originalChars, charsAfter: compressedChars, strategy: chain,
+        })
         continue
       }
       if (getConfig().mode !== 'live') {
         ctx.logger.info(LOG_TAG + ': armB [audit] seq=' + candidate.seq + ' ' + candidate.toolName +
           ' chars ' + originalChars + '->' + compressedChars + ' (-' + pct + '%) mode=audit')
+        store.audit({
+          toolName: candidate.toolName, callId: message.source.callId,
+          sessionId: String(agent.session?.id ?? agent.id ?? ''), state: 'not-adopted',
+          reason: 'armB-mode-audit', charsBefore: originalChars, charsAfter: compressedChars, strategy: chain,
+        })
         continue
       }
       if (meter === undefined) {
@@ -161,10 +171,13 @@ async function reclaimPass(
         hash,
         toolName: candidate.toolName,
         callId: message.source.callId,
-        sessionId: String(agent.id),
+        sessionId: String(agent.session?.id ?? agent.id ?? ''),
         strategy: chain,
         charsBefore: originalChars,
         charsAfter: compressedChars,
+        tokensBefore: response.tokens_before,
+        tokensAfter: response.tokens_after,
+        seq: candidate.seq,
         originalText: text,
       })
       assertRetrievable(store.get(hash) !== undefined, hash)
