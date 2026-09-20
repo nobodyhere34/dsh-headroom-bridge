@@ -1,5 +1,11 @@
 # 更新日志 (Changelog)
 
+## v0.2.1 (2026-09-17)
+
+### 修复
+
+- **npm 安装后加载失败（`Cannot find package 'schemastery'`）**：`src/config.ts` 用了裸导入 `from 'schemastery'`，开发机被 `node_modules/schemastery` 便利软链掩盖；用户侧按声明安装的却是 **scoped** 的 `@deepseek-ai/schemastery`（registry 真实包名，与官方 settings 包同款姿势），运行时 `lib/config.js` 找裸名必然 ERR_MODULE_NOT_FOUND、整棵插件树拒载。现导入改 scoped、build.sh 链接同步改 scoped 并删除裸链（杜绝再被掩盖）、`dependencies` 声明本就正确不动。已全面审计 lib 产物：零裸运行时导入（node: 与 @deepseek-ai/* 之外无一例外）
+
 ## v0.2.0 (2026-09-16)
 
 主题：**轨迹完整性三件套**——压缩从"只有一行 marker"变成全程可见、可审计、可回溯。

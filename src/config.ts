@@ -8,7 +8,7 @@
  * @module
  */
 
-import z from 'schemastery'
+import z from '@deepseek-ai/schemastery'
 
 /** Compression behavior modes. */
 export type BridgeMode =
