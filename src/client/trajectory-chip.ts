@@ -241,29 +241,27 @@ const TRAJECTORY_TAB_LABELS = ['轨迹', 'Trajectory']
  * focused on one tool call. Complements the cold-mount path (localStorage
  * pre-write, which the official store hydrates on first mount): a session
  * already mounted in this browser run keeps its cached store and ignores the
- * preference, so the warm path is direct DOM - click the view tab
- * (role=tab/aria-selected, label-matched with a two-tab fallback) and scroll
- * the `kind\0call\0<callId>` row into view with a brief green flash. Rows
- * folded out of the rendered window may never mount; then the view switch
- * stands and the bubbles cover manual scrolling.
+ * preference, so the warm path is direct DOM - click the trajectory tab
+ * (role=tab/aria-selected, label-matched ONLY) and scroll the
+ * `kind\0call\0<callId>` row into view with a brief green flash.
+ *
+ * Clicking is strictly limited to the label-matched trajectory tab, and the
+ * retry stops once the row was found or the table demonstrably mounted
+ * without it (a folded-out row never arrives by waiting, and a sub-agent
+ * session's compression rows live in the CHILD's own trajectory - the parent
+ * page can never host them). An earlier two-tab fallback clicked "the other
+ * unselected tab", which made the retry loop alternate trajectory/chat every
+ * tick whenever the row could not mount: the view visibly bounced.
  * @param callId - tool call to focus, when the source row knows one.
  * @returns nothing.
  */
 export function driveTrajectoryView(callId?: string): void {
   if (typeof document === 'undefined' || typeof setTimeout === 'undefined') return
-  const clickTab = (): void => {
-    const tabs = Array.from(document.querySelectorAll('[role="tab"]'))
-    if (tabs.length === 0) return
-    const unselected = tabs.filter((tab) => tab.getAttribute('aria-selected') !== 'true')
-    if (unselected.length === 0) return
-    const byLabel = unselected.find(
-      (tab) => TRAJECTORY_TAB_LABELS.includes((tab.textContent ?? '').trim()),
+  const trajectoryTab = (selected: boolean): Element | undefined =>
+    Array.from(document.querySelectorAll('[role="tab"]')).find(
+      (tab) => (tab.getAttribute('aria-selected') === 'true') === selected
+        && TRAJECTORY_TAB_LABELS.includes((tab.textContent ?? '').trim()),
     )
-    // No label match: exactly-two-tab strips have precisely one other view,
-    // the trajectory (chat is the only co-registered view today).
-    const pick = byLabel ?? (tabs.length === 2 ? unselected[0] : undefined)
-    pick?.click()
-  }
   const focusRow = (): boolean => {
     if (callId === undefined || callId === '') return true
     const table = document.querySelector('[data-trajectory-scroll]')
@@ -282,10 +280,18 @@ export function driveTrajectoryView(callId?: string): void {
     return true
   }
   let tries = 0
+  let missed = 0
   const step = (): void => {
     tries++
-    clickTab()
+    // Click only while the trajectory tab is not the selected one - and only
+    // ever the trajectory tab itself. (The removed two-tab fallback clicked
+    // the opposite tab and made unmountable rows bounce the view every tick.)
+    if (trajectoryTab(true) === undefined) trajectoryTab(false)?.click()
     if (focusRow()) return
+    // The table mounted but the row is absent: virtualization folded it out,
+    // or this is a sub-agent session whose compression rows live in the
+    // child's own trajectory. Waiting more will not materialize it.
+    if (document.querySelector('[data-trajectory-scroll]') !== null && ++missed >= 8) return
     if (tries < 25) setTimeout(step, 120)
   }
   step()

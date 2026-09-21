@@ -7,7 +7,7 @@
  * invalid input (misconfiguration fails loud at load).
  * @module
  */
-import z from 'schemastery';
+import z from '@deepseek-ai/schemastery';
 /** Compression behavior modes. */
 export type BridgeMode = 
 /** Observe and log potential savings; never touch model-visible content. */

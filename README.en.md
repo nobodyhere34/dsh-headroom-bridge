@@ -36,7 +36,7 @@ The bridge uses exactly three endpoints: `POST /v1/compress` (one tool message, 
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # local directory
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.2.1'  # GitHub tag
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.2.2'  # GitHub tag
 pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.3.tgz # tarball
 ```
 
@@ -131,7 +131,7 @@ This project's trade: compressors, content routing, and CCR storage all live on 
 - **Node**: the ledger uses `node:sqlite` (built into Node **≥ 22.5**, zero external deps; 22.x emits an ExperimentalWarning, harmless). On lower versions the plugin fails to load (module missing) — don't install there
 - DSH: the current code is adapted to and verified against mainline **dsh-v0.1.5-rc.2** (typecheck + 52 unit tests green). The adaptation uses rc.2-only interface shapes (`SessionSeq`/`snapshotEvents()`/`eventAt()`, `surfaceOp: {op:'replace', startSeq, endSeq}`, `ctx.settings.installSection`, the `@deepseek-ai/cordis` package name) and **no longer supports 0.1.2-rc.1 or earlier** — those call sites fail outright on older hosts
 - headroom proxy: official `0.36.5-code` and `0.37.0-code` **both verified**. On 0.37 note: ① the bridge's `/v1/compress` request shape (single tool message) is unchanged and #3286 subagent-output garbling is fixed (Chinese/code fences/JSON keys all preserved in tests); ② the standalone endpoint no longer mints proxy-side CCR (`ccr_hashes` stays empty — the bridge's local ledger was always the authoritative redemption path, unaffected); ③ a new router reversibility gate skips lossy compression that cannot attach a proxy marker — **run the proxy with `--no-ccr`** (the bridge carries its own ledger and markers). Also 0.37 routes prose through the kompress neural model (needs HuggingFace reachability to warm `chopratejas/kompress-v2-base` + `answerdotai/ModernBERT-base`; without them prose/log content passes through unchanged)
-- This repo is at 0.2.1 (GitHub tag `v0.2.1`); 0.1.0 was the untagged initial form — don't read compatibility off its peer declarations
+- This repo is at 0.2.2 (GitHub tag `v0.2.2`); 0.1.0 was the untagged initial form — don't read compatibility off its peer declarations
 
 ## FAQ
 

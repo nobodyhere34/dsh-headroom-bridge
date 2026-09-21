@@ -1,6 +1,6 @@
 {
   "name": "@nobodyhere34/dsh-headroom-bridge",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Headroom content-aware compression bridge for dsh: arm-A post-execute compression (audit/live) of new tool results, arm-B pre-step shadow-price reclaim of old oversized results, headroom_retrieve / headroom_stats model tools, local CCR ledger, and a web settings card.",
   "private": true,
   "type": "module",

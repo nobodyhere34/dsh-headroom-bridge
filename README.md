@@ -36,7 +36,7 @@ docker run -d --name headroom --network host -e HF_HOME=/root/.headroom/hf-cache
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-headroom-bridge                 # 本地目录
-dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.2.1'  # GitHub tag
+dsh plugin --profile web add 'github:nobodyhere34/dsh-headroom-bridge#v0.2.2'  # GitHub tag
 pnpm pack && dsh plugin --profile web add ./dsh-headroom-bridge-0.1.3.tgz # tarball
 ```
 
@@ -131,7 +131,7 @@ live 采纳后模型看到的是压缩文本 + 一行标记：
 - **Node**：台账用 `node:sqlite`（Node **≥ 22.5** 内置，零外部依赖；22.x 会有 ExperimentalWarning，无碍）。更低版本上插件装载即失败（模块不存在），别装
 - DSH：当前代码在主线 **dsh-v0.1.5-rc.2** 上适配并验证（typecheck + 52 个单元测试全绿）。适配用了 rc.2 才有的接口形态（`SessionSeq`/`snapshotEvents()`/`eventAt()`、`surfaceOp: {op:'replace', startSeq, endSeq}`、`ctx.settings.installSection`、`@deepseek-ai/cordis` 包名），**不再兼容 0.1.2-rc.1 及更早**——旧版上这些调用点会直接报错
 - headroom 代理：官方 `0.36.5-code` 与 `0.37.0-code` **均验证过**。0.37 有三点要注意：① `/v1/compress` 的桥请求形状（单条 tool 消息）兼容不变，#3286 混合子代理输出乱码已修复（实测中文/代码围栏/JSON 键全保留）；② 独立端点不再产生代理侧 CCR（`ccr_hashes` 恒空，代理侧赎回兜底失效——桥的本地台账本就是权威赎回路径，不受影响）；③ 路由器新增「可逆性强制」会把无法挂代理标记的有损压缩整条跳过——**必须带 `--no-ccr` 起代理**（桥自带台账与标记，代理无需管赎回）。另 0.37 的散文压缩改用 kompress 神经模型（需 HuggingFace 联网预热 `chopratejas/kompress-v2-base` 与 `answerdotai/ModernBERT-base`，不通则散文/日志类恒等透传）
-- 本仓库当前 0.2.1（GitHub tag `v0.2.1`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
+- 本仓库当前 0.2.2（GitHub tag `v0.2.2`）；0.1.0 是无 tag 的初始形态，请勿用其 peer 声明判断兼容性
 
 ## FAQ
 
