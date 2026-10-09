@@ -61,18 +61,23 @@ for (const need of ['slots', 'locale', 'configForms', 'uiConversation', 'session
 }
 if (!recorded.calls.some((c) => c.includes('events.register headroom'))) fail('turn projection not registered')
 if (!recorded.calls.some((c) => c === 'locale settings.plugins.headroom:zh,en')) fail('card dictionaries not registered')
-const card = recorded.registrations.find((r) => r.name === 'plugins.item')
+const card = recorded.registrations.find((r) => r.name === 'plugins.bundle.config')
 const chip = recorded.registrations.find((r) => r.name === 'conversation.chat.turnTail')
-if (!card) fail('settings card not registered')
-if (!card || typeof card.label !== 'function') fail('settings card label missing')
+if (!card) fail('settings card not registered on plugins.bundle.config')
+if (typeof card.key !== 'string' || card.key !== '@nobodyhere34/dsh-headroom-bridge') fail('keyed card registration must key by bundle package name, got ' + String(card.key))
 if (!chip) fail('turn-tail chip not registered')
-// List-slot registrations must carry an id (the real slot registry throws
-// "requires options.id" otherwise — mirror the rule so the stub cannot pass
-// what the browser would reject).
+// Kind validation mirrors the real slot registry: keyed slots require options.key,
+// list slots require a non-empty options.id, and neither accepts a chain `select`
+// (the per-turn gate lives in the component). The stub must reject what the
+// browser would reject.
 for (const reg of recorded.registrations) {
-  if (reg.select !== undefined) fail(`chain-slot select on "${reg.name}" (turnTail/plugins.item are list slots; per-turn gating lives in the component)`)
-  if (reg.name === 'conversation.chat.turnTail' || reg.name === 'plugins.item') {
+  if (reg.select !== undefined) fail(`chain-slot select on "${reg.name}" (plugins.bundle.config/turnTail are keyed/list; per-turn gating lives in the component)`)
+  if (reg.name === 'conversation.chat.turnTail') {
     if (typeof reg.id !== 'string' || reg.id === '') fail(`list slot "${reg.name}" requires a non-empty options.id`)
+  }
+  if (reg.name === 'plugins.bundle.config') {
+    if (typeof reg.key !== 'string' || reg.key === '') fail(`keyed slot "${reg.name}" requires options.key`)
+    if (reg.id !== undefined) fail(`keyed slot "${reg.name}" must not carry a list id`)
   }
 }
 console.log('SMOKE OK: id, inject, ' + recorded.calls.length + ' effects, card + chip(list id) registered')

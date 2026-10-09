@@ -14,37 +14,38 @@
  * failure keeps the untouched original decision.
  * @module
  */
-import type { Context } from '@deepseek-ai/cordis';
+import type { Context, Volatile } from '@deepseek-ai/cordis';
 import type ToolRegistry from '@deepseek-ai/dsh-tools';
-import type { Config as RawBridgeConfig } from './config.js';
+import { Config } from './config.js';
+import type { ArmBConfig, CcrConfig } from './config.js';
 export declare const name = "@nobodyhere34/dsh-headroom-bridge";
 /** Require the tool registry and the webserver the web card fetches. */
 export declare const inject: string[];
+export { Config };
 /**
- * Config validator face for loaders probing a standard-schema-style export;
- * resolution itself runs inside apply() and throws on invalid input so
- * misconfiguration fails loud at load.
+ * apply's config parameter: the schema's `.volatile()` fields arrive as live
+ * getters (a hot edit is read at the next get, no fiber rebuild); the rest
+ * arrive as resolved plain values (cordis.yml, restart semantics).
  */
-export declare const Config: {
-    '~standard': {
-        version: 1;
-        vendor: string;
-        validate(value: unknown): {
-            value: unknown;
-            issues?: undefined;
-        } | {
-            issues: {
-                message: string;
-            }[];
-            value?: undefined;
-        };
-    };
-};
+interface ApplyConfig {
+    enabled: Volatile<boolean>;
+    mode: Volatile<'audit' | 'live'>;
+    baseUrl: Volatile<string>;
+    timeoutMs: Volatile<number>;
+    minChars: Volatile<number>;
+    minSavingsRatio: Volatile<number>;
+    protectErrorOutputs: Volatile<boolean>;
+    excludeTools: string[];
+    protectPathGlobs: string[];
+    maxInflight: number;
+    armB: Partial<ArmBConfig>;
+    ccr: Partial<CcrConfig>;
+}
 /**
  * Plugin entry point.
  * @param ctx - cordis context to mount effects on.
- * @param config - partial bridge configuration (composition layer).
+ * @param config - the resolved entry config (volatile fields are live getters).
  */
 export declare function apply(ctx: Context & {
     tools: ToolRegistry;
-}, config: RawBridgeConfig | undefined): void;
+}, config: ApplyConfig): void;

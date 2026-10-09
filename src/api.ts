@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { LOG_TAG } from './config.js'
 import type { CcrStore } from './store.js'
 import type { HeadroomClient } from './proxy-client.js'
-import type { ConfigSource } from './settings.js'
+import type { ResolvedConfig } from './config.js'
 import type { BridgeCounters } from './stats.js'
 // Type-only: the ctx.webServer Context merge.
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -27,14 +27,14 @@ function send(res: ServerResponse, code: number, obj: unknown): void {
 /**
  * Install the bridge HTTP routes on one context.
  * @param ctx - plugin context with the webserver service.
- * @param source - mutable config source for the mode/baseUrl projection.
+ * @param getConfig - resolver for the current runtime view (mode/baseUrl projection).
  * @param store - CCR ledger for browsing.
  * @param counters - arm counters for the stats projection.
  * @param getClient - thunk resolving the current proxy client.
  */
 export function installApi(
   ctx: Context,
-  source: ConfigSource,
+  getConfig: () => ResolvedConfig,
   store: CcrStore,
   counters: BridgeCounters,
   getClient: () => HeadroomClient,
@@ -46,7 +46,7 @@ export function installApi(
       try {
         const path = new URL(req.url ?? '/', 'http://localhost').pathname
           .replace(new RegExp('^' + API_PREFIX.replace(/\//g, '\\/')), '') || '/'
-        const cfg = source.get()
+        const cfg = getConfig()
         if (req.method === 'GET' && path === '/stats') {
           const st = store.stats()
           return send(res, 200, {

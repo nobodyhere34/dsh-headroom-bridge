@@ -94,12 +94,16 @@ export function apply(ctx: ClientContext): void {
       : undefined,
   )
 
-  ctx.effect(() => ctx.slots.inject('plugins.item', () =>
+  // The card mounts on this bundle's page in the Plugins panel. The
+  // plugins.item slot is the Official group's registry (occupied by the
+  // settings companions); a community bundle's configuration belongs in the
+  // keyed plugins.bundle.config, keyed by the bundle's package name. The page
+  // renders it `view: 'page'` inside a section it titles itself, so the card
+  // needs no list-slot id/order/label - the keyed key alone places it.
+  ctx.effect(() => ctx.slots.inject('plugins.bundle.config', () =>
     ctx.slots.register({
-      name: 'plugins.item',
-      id: HEADROOM_NS,
-      order: 100,
-      label: () => t('headroomTitle'),
+      name: 'plugins.bundle.config',
+      key: '@nobodyhere34/dsh-headroom-bridge',
       locale: NS,
       inject: () => headroom.inject(),
     }, HeadroomCard),

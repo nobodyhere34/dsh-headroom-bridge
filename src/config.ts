@@ -235,35 +235,41 @@ export function resolveConfig(raw: Config | undefined): ResolvedConfig {
 }
 
 /**
- * Schemastery face for the settings namespace: mirrors the raw Config shape
- * so the web card and installSection validate the same fields the
- * loader entry and resolveConfig do. Object keys are optional by schemastery
- * convention; resolution happens in resolveConfig.
+ * The Loader entry schema. Served to the web settings card by the Host's
+ * SettingsForms projection, which keys the namespace by the entry id
+ * ('dsh-headroom-bridge', the cordis.patch.yml id) and renders a field only
+ * when it is marked `.volatile()`. The seven volatile fields are exactly the
+ * ones the web card hot-edits (mode, enabled, baseUrl, timeoutMs, minChars,
+ * minSavingsRatio, protectErrorOutputs); everything else — the protection
+ * lists, maxInflight, and the armB/ccr subtrees — stays non-volatile and is
+ * set from cordis.yml with restart semantics (ccr store options bind at
+ * construct time regardless). Defaults mirror resolveConfig so a field the
+ * user has not set still resolves the same in either place.
  */
-export const SettingsSchema: z<Config> = z.object({
-  enabled: z.boolean(),
-  mode: z.union([z.const('audit'), z.const('live')]),
-  baseUrl: z.string(),
-  timeoutMs: z.number(),
-  minChars: z.number(),
-  minSavingsRatio: z.number(),
+export const Config = z.object({
+  enabled: z.boolean().default(true).volatile(),
+  mode: z.union([z.const('audit'), z.const('live')]).default('audit').volatile(),
+  baseUrl: z.string().default('http://127.0.0.1:8787').volatile(),
+  timeoutMs: z.number().step(1).min(1).default(30_000).volatile(),
+  minChars: z.number().step(1).min(1).default(500).volatile(),
+  minSavingsRatio: z.number().min(0).max(1).default(0.15).volatile(),
+  protectErrorOutputs: z.boolean().default(true).volatile(),
   excludeTools: z.array(z.string()),
-  protectErrorOutputs: z.boolean(),
   protectPathGlobs: z.array(z.string()),
-  maxInflight: z.number(),
+  maxInflight: z.number().step(1).min(1).default(2),
   armB: z.object({
-    enabled: z.boolean(),
-    thresholdChars: z.number(),
-    minSavingsRatio: z.number(),
-    maxPerStep: z.number(),
+    enabled: z.boolean().default(true),
+    thresholdChars: z.number().step(1).min(1).default(16_384),
+    minSavingsRatio: z.number().min(0).max(1).default(0.3),
+    maxPerStep: z.number().step(1).min(1).default(2),
   }),
   ccr: z.object({
-    enabled: z.boolean(),
-    ttlMs: z.number(),
-    maxEntries: z.number(),
-    maxBytes: z.number(),
-    auditKeep: z.number(),
-    gcIntervalMs: z.number(),
-    path: z.string(),
+    enabled: z.boolean().default(true),
+    ttlMs: z.number().step(1).min(1).default(DEFAULT_CCR_TTL_MS),
+    maxEntries: z.number().step(1).min(1).default(DEFAULT_CCR_MAX_ENTRIES),
+    maxBytes: z.number().step(1).min(1).default(DEFAULT_CCR_MAX_BYTES),
+    auditKeep: z.number().step(1).min(1).default(DEFAULT_CCR_AUDIT_KEEP),
+    gcIntervalMs: z.number().step(1).min(1).default(DEFAULT_CCR_GC_INTERVAL_MS),
+    path: z.string().default(''),
   }),
 })

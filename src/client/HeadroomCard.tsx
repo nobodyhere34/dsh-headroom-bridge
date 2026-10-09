@@ -10,8 +10,8 @@
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { HeadroomCardFace } from './headroom-card-controller.ts'
-// Type-only: pulls the section package's 'settings.plugin.item' slot declaration.
-import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
+// Type-only: the Plugins page's SlotMap merge (the 'plugins.bundle.config' entry).
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { SelectField, SwitchField, ValueField } from './fields.tsx'
 import type { HeadroomCardLocaleKey } from './locales.ts'
 import { PluginCard } from './PluginCard.tsx'
@@ -19,7 +19,7 @@ import css from './HeadroomCard.module.css'
 
 /** Props the renderer binds for the headroom card. */
 export type HeadroomCardProps =
-  PropsRuntime<'settings.plugin.item'>
+  PropsRuntime<'plugins.bundle.config'>
   & PropsLocale<'settings.plugins.headroom'>
   & InjectFace<HeadroomCardFace>
 

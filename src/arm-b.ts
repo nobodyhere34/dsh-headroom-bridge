@@ -19,7 +19,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { freezeMessage } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 // Type-only: the compaction/prune SessionEventMap merge + tokenMeter ctx merge.
 import type {} from '@deepseek-ai/dsh-compaction'
 import type {} from '@deepseek-ai/dsh-token-meter'
@@ -57,12 +56,6 @@ function toolCallOf(session: Session, callId: string): { name: string; args: unk
   return undefined
 }
 
-/** The single result block of a tool-result message, when shaped as expected. */
-function resultBlock(message: ToolResultMessage): Extract<ContentBlock, { type: 'tool-result' }> | undefined {
-  const block = message.content[0]
-  return block?.type === 'tool-result' ? block : undefined
-}
-
 /**
  * Reclaim the first maxPerStep eligible candidates of one session.
  * Attempted seqs stay marked so later passes advance past low-yield nodes.
@@ -90,9 +83,7 @@ async function reclaimPass(
     if (attempted.has(seq)) continue
     const call = toolCallOf(session, event.data.message.source.callId)
     if (call === undefined) continue // no tool identity: stay conservative
-    const block = resultBlock(event.data.message)
-    if (block === undefined) continue
-    const text = flattenPlainText(block.content)
+    const text = flattenPlainText(event.data.message.content)
     const skip = evaluateGates({
       enabled: true,
       toolName: call.name,
@@ -116,9 +107,7 @@ async function reclaimPass(
     attempted.add(candidate.seq)
     counters.attempts++
     const message = candidate.event.data.message
-    const block = resultBlock(message)
-    if (block === undefined) continue
-    const text = flattenPlainText(block.content)
+    const text = flattenPlainText(message.content)
     if (text === undefined) continue
     const originalChars = codePointLength(text)
     try {
@@ -184,7 +173,7 @@ async function reclaimPass(
       const replacementText = appendMarker(compressed, renderMarker(hash, originalChars, compressedChars))
       const replacementMessage = freezeMessage<ToolResultMessage>({
         ...message,
-        content: [{ ...block, content: [{ type: 'text', text: replacementText }] }],
+        content: [{ type: 'text', text: replacementText }],
       })
       // Shadow-price protocol: metering event and replacement appended
       // synchronously adjacent; the replacement cites its shadowed node.

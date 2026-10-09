@@ -96,9 +96,93 @@ export declare function modeOf(value: unknown): BridgeMode;
  */
 export declare function resolveConfig(raw: Config | undefined): ResolvedConfig;
 /**
- * Schemastery face for the settings namespace: mirrors the raw Config shape
- * so the web card and installSection validate the same fields the
- * loader entry and resolveConfig do. Object keys are optional by schemastery
- * convention; resolution happens in resolveConfig.
+ * The Loader entry schema. Served to the web settings card by the Host's
+ * SettingsForms projection, which keys the namespace by the entry id
+ * ('dsh-headroom-bridge', the cordis.patch.yml id) and renders a field only
+ * when it is marked `.volatile()`. The seven volatile fields are exactly the
+ * ones the web card hot-edits (mode, enabled, baseUrl, timeoutMs, minChars,
+ * minSavingsRatio, protectErrorOutputs); everything else — the protection
+ * lists, maxInflight, and the armB/ccr subtrees — stays non-volatile and is
+ * set from cordis.yml with restart semantics (ccr store options bind at
+ * construct time regardless). Defaults mirror resolveConfig so a field the
+ * user has not set still resolves the same in either place.
  */
-export declare const SettingsSchema: z<Config>;
+export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+    enabled: z<boolean, boolean, "volatile-defined">;
+    mode: z<"audit" | "live", "audit" | "live", "volatile-defined">;
+    baseUrl: z<string, string, "volatile-defined">;
+    timeoutMs: z<number, number, "volatile-defined">;
+    minChars: z<number, number, "volatile-defined">;
+    minSavingsRatio: z<number, number, "volatile-defined">;
+    protectErrorOutputs: z<boolean, boolean, "volatile-defined">;
+    excludeTools: z<string[], string[], "plain">;
+    protectPathGlobs: z<string[], string[], "plain">;
+    maxInflight: z<number, number, "defined">;
+    armB: z<Schemastery.ObjectS<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        thresholdChars: z<number, number, "defined">;
+        minSavingsRatio: z<number, number, "defined">;
+        maxPerStep: z<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        thresholdChars: z<number, number, "defined">;
+        minSavingsRatio: z<number, number, "defined">;
+        maxPerStep: z<number, number, "defined">;
+    }>>, "plain">;
+    ccr: z<Schemastery.ObjectS<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        ttlMs: z<number, number, "defined">;
+        maxEntries: z<number, number, "defined">;
+        maxBytes: z<number, number, "defined">;
+        auditKeep: z<number, number, "defined">;
+        gcIntervalMs: z<number, number, "defined">;
+        path: z<string, string, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        ttlMs: z<number, number, "defined">;
+        maxEntries: z<number, number, "defined">;
+        maxBytes: z<number, number, "defined">;
+        auditKeep: z<number, number, "defined">;
+        gcIntervalMs: z<number, number, "defined">;
+        path: z<string, string, "defined">;
+    }>>, "plain">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    enabled: z<boolean, boolean, "volatile-defined">;
+    mode: z<"audit" | "live", "audit" | "live", "volatile-defined">;
+    baseUrl: z<string, string, "volatile-defined">;
+    timeoutMs: z<number, number, "volatile-defined">;
+    minChars: z<number, number, "volatile-defined">;
+    minSavingsRatio: z<number, number, "volatile-defined">;
+    protectErrorOutputs: z<boolean, boolean, "volatile-defined">;
+    excludeTools: z<string[], string[], "plain">;
+    protectPathGlobs: z<string[], string[], "plain">;
+    maxInflight: z<number, number, "defined">;
+    armB: z<Schemastery.ObjectS<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        thresholdChars: z<number, number, "defined">;
+        minSavingsRatio: z<number, number, "defined">;
+        maxPerStep: z<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        thresholdChars: z<number, number, "defined">;
+        minSavingsRatio: z<number, number, "defined">;
+        maxPerStep: z<number, number, "defined">;
+    }>>, "plain">;
+    ccr: z<Schemastery.ObjectS<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        ttlMs: z<number, number, "defined">;
+        maxEntries: z<number, number, "defined">;
+        maxBytes: z<number, number, "defined">;
+        auditKeep: z<number, number, "defined">;
+        gcIntervalMs: z<number, number, "defined">;
+        path: z<string, string, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: z<boolean, boolean, "defined">;
+        ttlMs: z<number, number, "defined">;
+        maxEntries: z<number, number, "defined">;
+        maxBytes: z<number, number, "defined">;
+        auditKeep: z<number, number, "defined">;
+        gcIntervalMs: z<number, number, "defined">;
+        path: z<string, string, "defined">;
+    }>>, "plain">;
+}>>, "plain">;

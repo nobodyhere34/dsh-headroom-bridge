@@ -1,8 +1,9 @@
 /**
- * The headroom card's staged form over the 'headroom' settings namespace.
+ * The headroom card's staged form over the bridge's settings namespace.
  *
  * The namespace is spelled here rather than imported: a client package must
  * not depend on a Host package, and the Host side spells the same value.
+ * @module
  */
 
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -12,8 +13,8 @@ import {
   type CardActions, type CardFieldState, type CardShell,
 } from './card-form.ts'
 
-/** Settings namespace of the bridge, matching the Host's registration. */
-export const HEADROOM_NS = 'headroom'
+/** Settings namespace of the bridge — the Loader entry id (the cordis.patch.yml `id`), which is how the Host's SettingsForms keys the served namespace. */
+export const HEADROOM_NS = 'dsh-headroom-bridge'
 
 /** The bridge fields this card edits — the hot subset of the served schema. */
 export interface HeadroomSettings {

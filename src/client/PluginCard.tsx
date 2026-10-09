@@ -16,7 +16,7 @@
  */
 
 import { useState, type ReactNode } from 'react'
-import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { CardShell } from './card-form.ts'
 import type { HeadroomCardLocaleKey } from './locales.ts'
 import css from './PluginCard.module.css'
@@ -64,7 +64,7 @@ export function PluginCard(props: PluginCardProps) {
           <span className={css.description}>{props.t(props.descriptionKey)}</span>
         </span>
         {state.dirty ? <span className={css.pending}>{props.t('unsaved')}</span> : null}
-        <IconChevronDownOutline14 className={open ? `${css.chevron} ${css.chevronOpen}` : css.chevron} />
+        <IconChevronDownOutlineRegular className={open ? `${css.chevron} ${css.chevronOpen}` : css.chevron} />
       </button>
       {open
         ? (

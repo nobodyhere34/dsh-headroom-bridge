@@ -15,15 +15,14 @@
  * @module
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import type ToolRegistry from '@deepseek-ai/dsh-tools'
 import { HeadroomClient } from './proxy-client.js'
-import { LOG_TAG, PKG_NAME, resolveConfig } from './config.js'
-import type { Config as RawBridgeConfig } from './config.js'
+import { Config, LOG_TAG, PKG_NAME, resolveConfig } from './config.js'
+import type { ArmBConfig, CcrConfig, ResolvedConfig } from './config.js'
 import { installArmA } from './arm-a.js'
 import { installArmB } from './arm-b.js'
 import { installApi } from './api.js'
-import { createConfigSource, installSettings } from './settings.js'
 import { CcrStore } from './store.js'
 import { installLifecycle } from './lifecycle.js'
 import { retrieveStatsTool, retrieveTool } from './tools.js'
@@ -34,34 +33,55 @@ export const name = PKG_NAME
 /** Require the tool registry and the webserver the web card fetches. */
 export const inject = ['tools', 'webServer']
 
+// The Loader entry schema (schemastery). Re-exported so the loader reads it as
+// this plugin's Config face: SettingsForms projects it into the web settings
+// namespace keyed by the entry id, serving the `.volatile()` fields.
+export { Config }
+
 /**
- * Config validator face for loaders probing a standard-schema-style export;
- * resolution itself runs inside apply() and throws on invalid input so
- * misconfiguration fails loud at load.
+ * apply's config parameter: the schema's `.volatile()` fields arrive as live
+ * getters (a hot edit is read at the next get, no fiber rebuild); the rest
+ * arrive as resolved plain values (cordis.yml, restart semantics).
  */
-export const Config = {
-  '~standard': {
-    version: 1 as const,
-    vendor: PKG_NAME,
-    validate(value: unknown) {
-      try {
-        resolveConfig(value as RawBridgeConfig)
-        return { value }
-      } catch (error: unknown) {
-        return { issues: [{ message: error instanceof Error ? error.message : String(error) }] }
-      }
-    },
-  },
+interface ApplyConfig {
+  enabled: Volatile<boolean>
+  mode: Volatile<'audit' | 'live'>
+  baseUrl: Volatile<string>
+  timeoutMs: Volatile<number>
+  minChars: Volatile<number>
+  minSavingsRatio: Volatile<number>
+  protectErrorOutputs: Volatile<boolean>
+  excludeTools: string[]
+  protectPathGlobs: string[]
+  maxInflight: number
+  armB: Partial<ArmBConfig>
+  ccr: Partial<CcrConfig>
 }
 
 /**
  * Plugin entry point.
  * @param ctx - cordis context to mount effects on.
- * @param config - partial bridge configuration (composition layer).
+ * @param config - the resolved entry config (volatile fields are live getters).
  */
-export function apply(ctx: Context & { tools: ToolRegistry }, config: RawBridgeConfig | undefined): void {
-  const source = createConfigSource(config)
-  const initial = source.get()
+export function apply(ctx: Context & { tools: ToolRegistry }, config: ApplyConfig): void {
+  // Resolve the immutable runtime view fresh on each read: the volatile getters
+  // return the card's latest edits, so hot changes need no fiber rebuild, while
+  // resolveConfig still runs the full validation + protection gates each pass.
+  const getConfig = (): ResolvedConfig => resolveConfig({
+    enabled: config.enabled.get(),
+    mode: config.mode.get(),
+    baseUrl: config.baseUrl.get(),
+    timeoutMs: config.timeoutMs.get(),
+    minChars: config.minChars.get(),
+    minSavingsRatio: config.minSavingsRatio.get(),
+    protectErrorOutputs: config.protectErrorOutputs.get(),
+    excludeTools: config.excludeTools,
+    protectPathGlobs: config.protectPathGlobs,
+    maxInflight: config.maxInflight,
+    armB: config.armB,
+    ccr: config.ccr,
+  })
+  const initial = getConfig()
   ctx.logger.info(
     LOG_TAG + ': armed mode=' + initial.mode +
     ' baseUrl=' + initial.baseUrl +
@@ -91,14 +111,12 @@ export function apply(ctx: Context & { tools: ToolRegistry }, config: RawBridgeC
 
   // The client is stateless; resolving a fresh one per use makes baseUrl and
   // timeoutMs hot-edits take effect without rebuilding the fiber.
-  const getClient = () => new HeadroomClient(source.get().baseUrl, source.get().timeoutMs)
-  const getConfig = () => source.get()
+  const getClient = () => new HeadroomClient(getConfig().baseUrl, getConfig().timeoutMs)
   void getClient().health().then((healthy) => {
-    ctx.logger.info(LOG_TAG + ': proxy health at ' + source.get().baseUrl + ' healthy=' + healthy)
+    ctx.logger.info(LOG_TAG + ': proxy health at ' + getConfig().baseUrl + ' healthy=' + healthy)
   })
 
-  installSettings(ctx, source, config)
-  installApi(ctx, source, store, counters, getClient)
+  installApi(ctx, getConfig, store, counters, getClient)
 
   ctx.effect(() => installArmA(ctx, getConfig, store, getClient, counters), LOG_TAG + ': arm-a post-execute')
   ctx.effect(() => installArmB(ctx, getConfig, store, getClient, counters), LOG_TAG + ': arm-b pre-step')
