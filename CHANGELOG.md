@@ -5,7 +5,8 @@
 ### 修复
 
 - **Web 启动时本插件 entry 永久卡 `pending (waiting for service: settingsScope)`**：dsh `0.2.0-rc.2` 把客户端设置服务 `settingsScope` 改名为 `configForms`，取单 namespace 的形式从 `settingsScope.bind({ namespace })` 改为 `configForms.get(namespace)`，导出类型同步从 `SettingsScope`/`SettingsScopeSnapshot` 改名为 `ConfigForm`/`ConfigFormSnapshot`。client 半区仍按旧名声明依赖，Cordis 拓扑永远凑不齐这条 entry 的注入集，web boot 报 `Failed to load plugins: web boot: 1 entry did not activate`。现将注入名、`ctx.configForms.get<HeadroomSettings>(HEADROOM_NS)` 调用、类型引用与快照类型对齐 `0.2.0-rc.2`；卡片所用的 `subscribe`/`getSnapshot`/`set`/`unset` 四项接口在新旧 `ConfigForm` 间语义一致，暂存表单逻辑零改动。重建 `lib/client.js` 后该 entry 进入 `apply()`。
-- **同一次漂移的第二处：entry 由 `pending` 转为 `failed`（`apply()` 抛错）**：服务凑齐后 `apply()` 首次运行，随即在卡片注册处抛错。0.2.0-rc.2 把官方插件配置页的 slot 从 `settings.plugin.item` 改为 `plugins.item`（`ui-plugin-manager` 的 SlotMap），注册字段亦从 `key` 改为 `id` 且新增 `order`/`label`。现卡片注册改投 `plugins.item`（`id: HEADROOM_NS`、`order`、`label: () => t('headroomTitle')`），与 `ui-settings-*` companion 同款姿势。`scripts/client-smoke.mjs` 同步到 `configForms`/`plugins.item` 后本地驱动 `apply()` 全绿。
+- **同一次漂移的第二处：entry 由 `pending` 转为 `failed`（`apply()` 抛错）**：服务凑齐后 `apply()` 首次运行，随即在卡片注册处抛错。0.2.0-rc.2 把官方插件配置页的 slot 从 `settings.plugin.item` 改为 `plugins.item`（`ui-plugin-manager` 的 SlotMap），注册字段亦从 `key` 改为 `id` 且新增 `order`/`label`。现卡片注册改投 `plugins.item`（`id: HEADROOM_NS`、`order`、`label: () => t('headroomTitle')`），与 `ui-settings-*` companion 同款姿势。
+- **第三处：turnTail 链槽改 list 槽，`apply()` 继续抛 `list slot "conversation.chat.turnTail" requires options.id`**：0.2.0-rc.2 把 `conversation.chat.turnTail` 从链槽（`select` 选举 + `priority` 链序）改为 list 槽——注册缺 `id` 直接抛，且每个 turn 渲染全部 entry。注册改 `id: HEADROOM_NS`；"仅在被压缩的 turn 显示"的门控从 `select` 迁入组件：`CompressChip` 收 owner props 的 `turn` 读 `turn.data.get('headroom')`，无命中即渲染 `null`，展开状态拆入内层 `HeadroomChip` 保持 hooks 顺序。`scripts/client-smoke.mjs` 按真实 slot registry 规则校验（list 槽强制非空 `id`、拒绝残留 `select`）。浏览器实测：boot 无报错，Plugins 页卡片与压缩 chip 正常。
 
 ## v0.2.2 (2026-09-17)
 
