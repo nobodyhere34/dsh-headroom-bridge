@@ -71,6 +71,7 @@ function preferTrajectoryView(sessionId: string, callId?: string): void {
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), '@deepseek-ai/dsh-headroom-bridge: card dictionaries')
+  const t = ctx.locale.bind(NS)
 
   // Session deep-linking is a workspace-navigation capability; it is optional
   // (a deployment may mount no workspace UI), so it is resolved conditionally
@@ -93,10 +94,12 @@ export function apply(ctx: ClientContext): void {
       : undefined,
   )
 
-  ctx.effect(() => ctx.slots.inject('settings.plugin.item', () =>
+  ctx.effect(() => ctx.slots.inject('plugins.item', () =>
     ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: HEADROOM_NS,
+      name: 'plugins.item',
+      id: HEADROOM_NS,
+      order: 100,
+      label: () => t('headroomTitle'),
       locale: NS,
       inject: () => headroom.inject(),
     }, HeadroomCard),
@@ -123,7 +126,6 @@ export function apply(ctx: ClientContext): void {
   // Trajectory-view bubbles: ui-trajectory offers no plugin extension point,
   // so this follows the ecosystem's direct-DOM precedent and attaches one
   // bubble per compressed tool row, matched by the callId the ledger stamped.
-  const translate = ctx.locale.bind(NS)
-  ctx.effect(() => installTrajectoryChip(ctx, (key, vars) => translate(key, vars)),
+  ctx.effect(() => installTrajectoryChip(ctx, (key, vars) => t(key, vars)),
     '@deepseek-ai/dsh-headroom-bridge: trajectory bubbles')
 }
