@@ -12,7 +12,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: pulls the settings surface's Context merge (ctx.settingsScope).
+// Type-only: pulls the settings surface's Context merge (ctx.configForms).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: the ui-chat / ui-conversation Context merges (ctx.uiConversation)
 // and the conversation.chat.turnTail slot declaration.
@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: the Session Controller Context merge (ctx.sessions) - the feed
 // that tells the trajectory bubbles which session is on screen.
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
-import { HEADROOM_NS, HeadroomCardController } from './headroom-card-controller.ts'
+import { HEADROOM_NS, HeadroomCardController, type HeadroomSettings } from './headroom-card-controller.ts'
 import { HeadroomCard } from './HeadroomCard.tsx'
 import { CompressChip } from './CompressChip.tsx'
 import { installTrajectoryChip, driveTrajectoryView } from './trajectory-chip.ts'
@@ -42,7 +42,7 @@ const NS = 'settings.plugins.headroom'
 const CONVERSATION_STORE_KEY = 'dsh.conversation'
 
 /** Required services: slots, locale, the settings scope, the conversation projection, and the session feed. */
-export const inject = ['slots', 'locale', 'settingsScope', 'uiConversation', 'sessions']
+export const inject = ['slots', 'locale', 'configForms', 'uiConversation', 'sessions']
 
 /**
  * Ask the next open of one session to land on its trajectory view, focused
@@ -67,7 +67,7 @@ function preferTrajectoryView(sessionId: string, callId?: string): void {
 
 /**
  * Mount the headroom settings card and the trajectory compression chip.
- * @param ctx - client context with the slots, locale, settingsScope and uiConversation services.
+ * @param ctx - client context with the slots, locale, configForms and uiConversation services.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), '@deepseek-ai/dsh-headroom-bridge: card dictionaries')
@@ -78,7 +78,7 @@ export function apply(ctx: ClientContext): void {
   // the link pre-arms the trajectory view + inspect focus (see above).
   const nav = ctx.get('uiWorkspace') as { openSession?: (id: string) => void } | undefined
   const headroom = new HeadroomCardController(
-    ctx.settingsScope.bind({ namespace: HEADROOM_NS }),
+    ctx.configForms.get<HeadroomSettings>(HEADROOM_NS),
     nav?.openSession
       ? (id: string, callId?: string) => {
         preferTrajectoryView(id, callId)

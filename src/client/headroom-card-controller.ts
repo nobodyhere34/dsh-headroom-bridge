@@ -5,7 +5,7 @@
  * not depend on a Host package, and the Host side spells the same value.
  */
 
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
   boolField, CardForm, numberField, selectField, textField,
@@ -75,7 +75,7 @@ export class HeadroomCardController {
    * @param openSession - workspace navigation to a session (optionally focused on a tool call), for activity-row deep links.
    */
   constructor(
-    scope: SettingsScope<HeadroomSettings>,
+    scope: ConfigForm<HeadroomSettings>,
     private readonly openSession?: (sessionId: string, callId?: string) => void,
   ) {
     this.form = new CardForm(scope, [
