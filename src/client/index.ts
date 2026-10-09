@@ -25,7 +25,7 @@ import { HEADROOM_NS, HeadroomCardController, type HeadroomSettings } from './he
 import { HeadroomCard } from './HeadroomCard.tsx'
 import { CompressChip } from './CompressChip.tsx'
 import { installTrajectoryChip, driveTrajectoryView } from './trajectory-chip.ts'
-import { headroomTurnDefinition, selectHeadroom } from '../turn-projection.ts'
+import { headroomTurnDefinition } from '../turn-projection.ts'
 import { en, zh } from './locales.ts'
 
 /** Dictionary namespace owned by this package's card. */
@@ -115,10 +115,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.slots.inject('conversation.chat.turnTail', () =>
     ctx.slots.register({
       name: 'conversation.chat.turnTail',
-      // Chain election tries ascending priority first; deliverables registers
-      // at the default 0, so a high rank keeps the headroom chip behind it.
-      priority: 100,
-      select: selectHeadroom,
+      id: HEADROOM_NS,
       locale: NS,
     }, CompressChip),
   ), '@deepseek-ai/dsh-headroom-bridge: trajectory chip')

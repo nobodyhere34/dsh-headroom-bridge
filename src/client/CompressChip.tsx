@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { selectHeadroom } from '../turn-projection.ts'
 import type { HeadroomTurnData, HeadroomHit } from '../turn-projection.ts'
 import css from './CompressChip.module.css'
 
@@ -73,17 +74,27 @@ function ChipRow({ hit, t }: { hit: HeadroomHit; t: T }) {
   )
 }
 
-/** Props the chain renderer receives: the elected match plus session-seat copy. */
+/** Props the list-slot renderer receives: the turn owner plus session-seat copy. */
 export interface CompressChipProps extends PropsLocale<'settings.plugins.headroom'> {
-  matched: HeadroomTurnData
+  /** Turn owner currency of the list slot; its data store carries the projection. */
+  turn: { data: { get: (kind: string) => HeadroomTurnData | undefined } }
 }
 
 /**
- * Render the compression chip for one closed turn.
- * @param props - the elected headroom match and bound copy.
- * @returns the chip element.
+ * Render the compression chip for one closed turn. The turnTail slot is a
+ * list (every entry renders per turn), so the headroom gate lives here: the
+ * chip renders only when the turn's projection carries compression hits.
+ * @param props - the turn owner currency and bound copy.
+ * @returns the chip element, or null for turns with no compression.
  */
-export function CompressChip({ matched, t }: CompressChipProps) {
+export function CompressChip({ turn, t }: CompressChipProps) {
+  const matched = selectHeadroom({ turn })
+  if (matched === null) return null
+  return <HeadroomChip matched={matched} t={t} />
+}
+
+/** The chip body over one turn's compression hits (state lives behind the gate). */
+function HeadroomChip({ matched, t }: { matched: HeadroomTurnData; t: T }) {
   const [expanded, setExpanded] = useState(false)
   const rows = matched.hits
   const before = rows.reduce((s, r) => s + r.charsBefore, 0)

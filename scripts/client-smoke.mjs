@@ -64,7 +64,15 @@ if (!recorded.calls.some((c) => c === 'locale settings.plugins.headroom:zh,en'))
 const card = recorded.registrations.find((r) => r.name === 'plugins.item')
 const chip = recorded.registrations.find((r) => r.name === 'conversation.chat.turnTail')
 if (!card) fail('settings card not registered')
+if (!card || typeof card.label !== 'function') fail('settings card label missing')
 if (!chip) fail('turn-tail chip not registered')
-if (typeof chip.select !== 'function') fail('chip selector missing')
-if (chip.priority !== 100) fail('chip priority must rank behind deliverables, got ' + chip.priority)
-console.log('SMOKE OK: id, inject, ' + recorded.calls.length + ' effects, card + chip(prio 100, select fn) registered')
+// List-slot registrations must carry an id (the real slot registry throws
+// "requires options.id" otherwise — mirror the rule so the stub cannot pass
+// what the browser would reject).
+for (const reg of recorded.registrations) {
+  if (reg.select !== undefined) fail(`chain-slot select on "${reg.name}" (turnTail/plugins.item are list slots; per-turn gating lives in the component)`)
+  if (reg.name === 'conversation.chat.turnTail' || reg.name === 'plugins.item') {
+    if (typeof reg.id !== 'string' || reg.id === '') fail(`list slot "${reg.name}" requires a non-empty options.id`)
+  }
+}
+console.log('SMOKE OK: id, inject, ' + recorded.calls.length + ' effects, card + chip(list id) registered')
